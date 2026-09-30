@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<style>
+body{margin:0;background:#F8F6F9;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1D1620;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#D63384;text-decoration:none}
+a:hover{color:#AB296A;text-decoration:underline}
+input,select,button,textarea{font-family:inherit}
+@keyframes fabBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes fabShine{0%,55%{transform:translateX(-140%) rotate(20deg)}85%,100%{transform:translateX(160%) rotate(20deg)}}
+@keyframes fabTwinkle{0%,100%{transform:scale(0) rotate(0);opacity:0}50%{transform:scale(1) rotate(90deg);opacity:1}}
+@keyframes fabBlink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes fabGlow{0%,100%{box-shadow:0 10px 28px -6px rgba(214,51,132,.55),0 0 0 0 rgba(214,51,132,.35)}50%{box-shadow:0 14px 34px -6px rgba(214,51,132,.7),0 0 0 10px rgba(214,51,132,0)}}
+@keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,53,69,.45)}50%{box-shadow:0 0 0 7px rgba(220,53,69,0)}}
+</style>
+</helmet>
+
+<sc-if value="{{ isLanding }}" hint-placeholder-val="{{ true }}">
+<div data-screen-label="Landing" style="min-height:100vh;background:#FFFFFF">
+  <nav style="position:sticky;top:0;z-index:10;background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid #EEE7EF">
+    <div style="max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:24px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <img src="assets/vec_logo.png" alt="สอศ." style="width:40px;height:40px">
+        <div style="display:flex;flex-direction:column;line-height:1.2">
+          <strong style="font-size:15px">ระบบจัดตารางเรียนอาชีวศึกษา</strong>
+          <span style="font-size:11px;color:#6E6473;letter-spacing:.04em">VEC SMART TIMETABLE</span>
+        </div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;gap:20px;font-size:14px;color:#4A4050;flex-wrap:wrap">
+        <a href="#features" style="color:#4A4050">ฟังก์ชัน</a>
+        <a href="#steps" style="color:#4A4050">ขั้นตอนการทำงาน</a>
+        <a href="#providers" style="color:#4A4050">ผู้ให้บริการ AI</a>
+      </div>
+      <button onClick="{{ enterApp }}" style="background:#D63384;color:#fff;border:0;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#AB296A">เข้าสู่ระบบ</button>
+    </div>
+  </nav>
+
+  <header style="background:radial-gradient(60% 70% at 85% 20%,#FCE7F1 0%,rgba(252,231,241,0) 70%);border-bottom:1px solid #EEE7EF">
+    <div style="max-width:1200px;margin:0 auto;padding:72px 24px 80px;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:56px;align-items:center">
+      <div style="display:flex;flex-direction:column;gap:22px">
+        <div style="display:inline-flex;align-self:flex-start;align-items:center;gap:8px;background:#FCE7F1;color:#AB296A;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600"><i class="bi bi-stars"></i>ผู้ช่วย AI สำหรับงานวิชาการ</div>
+        <h1 style="margin:0;font-size:46px;line-height:1.2;font-weight:700;letter-spacing:-.01em;text-wrap:pretty">จัดตารางเรียนตารางสอน<br><span style="color:#D63384">ตามนโยบายของสถานศึกษา</span><br>ด้วยผู้ช่วย AI</h1>
+        <p style="margin:0;font-size:18px;line-height:1.7;color:#5A5060;max-width:520px;text-wrap:pretty">นำเข้าข้อมูลครู กลุ่มผู้เรียน แผนการเรียน รายวิชา อาคารและห้องเรียน แล้วให้ AI ลงตารางตามนโยบายที่เรียงลำดับความสำคัญไว้ ส่วนที่จัดไม่ได้ ระบบจะบอกสาเหตุและทางแก้ รองรับหลายสถานศึกษาในระบบเดียว</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button onClick="{{ enterApp }}" style="background:#D63384;color:#fff;border:0;border-radius:10px;padding:14px 24px;font-size:16px;font-weight:600;cursor:pointer;display:flex;gap:8px;align-items:center" style-hover="background:#AB296A">เริ่มใช้งาน <i class="bi bi-arrow-right"></i></button>
+          <button onClick="{{ enterSchedule }}" style="background:#fff;color:#1D1620;border:1px solid #E2D8E4;border-radius:10px;padding:14px 24px;font-size:16px;font-weight:600;cursor:pointer" style-hover="border-color:#D63384;color:#D63384">ดูตัวอย่างการจัดตาราง</button>
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #EEE7EF;border-radius:16px;box-shadow:0 24px 60px -24px rgba(171,41,106,.28);padding:18px;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+          <strong>ปวช.1/1 เทคโนโลยีสารสนเทศ</strong><span style="color:#6E6473">· 32 คน</span>
+          <div style="flex:1"></div>
+          <span style="background:#E8F5EE;color:#157347;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:600">ลงครบ 26/26 ชม.</span>
+        </div>
+        <div style="display:grid;grid-template-columns:40px repeat(9,minmax(0,1fr));grid-template-rows:repeat(5,34px);gap:3px;font-size:10px">
+          <div style="grid-row:1;grid-column:1;color:#6E6473;display:flex;align-items:center">จ.</div>
+          <div style="grid-row:2;grid-column:1;color:#6E6473;display:flex;align-items:center">อ.</div>
+          <div style="grid-row:3;grid-column:1;color:#6E6473;display:flex;align-items:center">พ.</div>
+          <div style="grid-row:4;grid-column:1;color:#6E6473;display:flex;align-items:center">พฤ.</div>
+          <div style="grid-row:5;grid-column:1;color:#6E6473;display:flex;align-items:center">ศ.</div>
+          <div style="grid-row:1/6;grid-column:5;border-radius:4px;background:repeating-linear-gradient(135deg,#F3EEF4 0 5px,#fff 5px 10px);display:flex;align-items:center;justify-content:center;color:#9A8FA0;writing-mode:vertical-rl">พักกลางวัน</div>
+          <div style="grid-row:1;grid-column:2/5;background:#FCE7F1;border-radius:4px;padding:4px 6px;color:#AB296A;font-weight:600">วิทยาศาสตร์</div>
+          <div style="grid-row:1;grid-column:6/8;background:#FCE7F1;border-radius:4px;padding:4px 6px;color:#AB296A;font-weight:600">กราฟิก</div>
+          <div style="grid-row:2;grid-column:2;background:#fff;border:1.5px solid #D63384;border-radius:4px;padding:4px 6px;font-weight:600">ไทย</div>
+          <div style="grid-row:2;grid-column:3/5;background:#FCE7F1;border-radius:4px;padding:4px 6px;color:#AB296A;font-weight:600">อังกฤษ</div>
+          <div style="grid-row:2;grid-column:6/8;background:#fff;border:1.5px solid #D63384;border-radius:4px;padding:4px 6px;font-weight:600">โปรแกรม</div>
+          <div style="grid-row:3;grid-column:2/5;background:#FCE7F1;border-radius:4px;padding:4px 6px;color:#AB296A;font-weight:600">คอมพิวเตอร์ฯ</div>
+          <div style="grid-row:3;grid-column:8/10;background:#fff;border:1.5px solid #D63384;border-radius:4px;padding:4px 6px;font-weight:600">ลูกเสือ</div>
+          <div style="grid-row:4;grid-column:2/4;background:#FCE7F1;border-radius:4px;padding:4px 6px;color:#AB296A;font-weight:600">ระบบปฏิบัติการ</div>
+          <div style="grid-row:4;grid-column:4;background:#FCE7F1;border-radius:4px;padding:4px 6px;color:#AB296A;font-weight:600">คณิต</div>
+          <div style="grid-row:4;grid-column:6/8;background:#FCE7F1;border-radius:4px;padding:4px 6px;color:#AB296A;font-weight:600">ระบบปฏิบัติการ</div>
+          <div style="grid-row:5;grid-column:2/5;background:#FCE7F1;border-radius:4px;padding:4px 6px;color:#AB296A;font-weight:600">กราฟิก</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start;background:#1E1523;color:#F4EEF6;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.6">
+          <div style="width:26px;height:26px;border-radius:8px;background:#D63384;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="bi bi-stars"></i></div>
+          <div>ย้าย “การเขียนโปรแกรมเบื้องต้น” ที่ลงด้วยมือจากวันจันทร์เช้าไปวันอังคารบ่าย ทำให้ลงวิชาวิทยาศาสตร์ได้ครบ และไม่ขัดนโยบายข้อบังคับทุกข้อ</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section id="features" style="max-width:1200px;margin:0 auto;padding:80px 24px">
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:40px;max-width:640px">
+      <span style="color:#D63384;font-weight:600;font-size:14px">ฟังก์ชันของระบบ</span>
+      <h2 style="margin:0;font-size:32px;line-height:1.3">ครอบคลุมงานจัดตารางตั้งแต่ข้อมูลตั้งต้นจนถึงตารางที่ใช้งานจริง</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+      <sc-for list="{{ features }}" as="f" hint-placeholder-count="8">
+        <div style="border:1px solid #EEE7EF;border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:10px;background:#fff" style-hover="border-color:#F1B5D2">
+          <div style="width:40px;height:40px;border-radius:10px;background:#FCE7F1;color:#D63384;display:flex;align-items:center;justify-content:center;font-size:19px"><i class="bi {{ f.icon }}"></i></div>
+          <strong style="font-size:16px">{{ f.title }}</strong>
+          <p style="margin:0;font-size:14px;line-height:1.65;color:#5A5060">{{ f.text }}</p>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section id="steps" style="background:#1E1523;color:#F4EEF6">
+    <div style="max-width:1200px;margin:0 auto;padding:80px 24px">
+      <h2 style="margin:0 0 40px;font-size:32px">ขั้นตอนการทำงาน</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:24px">
+        <sc-for list="{{ steps }}" as="s" hint-placeholder-count="5">
+          <div style="display:flex;flex-direction:column;gap:10px;border-top:2px solid #D63384;padding-top:16px">
+            <span style="font-family:'IBM Plex Mono',monospace;color:#F08CBE;font-size:13px">{{ s.no }}</span>
+            <strong style="font-size:17px">{{ s.title }}</strong>
+            <p style="margin:0;font-size:14px;line-height:1.65;color:#C9BECE">{{ s.text }}</p>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section id="providers" style="max-width:1200px;margin:0 auto;padding:80px 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:48px;align-items:center">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span style="color:#D63384;font-weight:600;font-size:14px">เชื่อมต่อ AI ได้หลายแหล่ง</span>
+      <h2 style="margin:0;font-size:32px;line-height:1.3">เลือกผู้ให้บริการ LLM ที่สถานศึกษาใช้อยู่</h2>
+      <p style="margin:0;font-size:16px;line-height:1.7;color:#5A5060">ผู้ดูแลระบบกำหนด API Key และโมเดลได้เองในแต่ละสถานศึกษา ผู้ช่วย AI ทำงานแทนผู้ใช้ได้เฉพาะในขอบเขตสิทธิ์ของบทบาท ส่วนที่เกินสิทธิ์จะแนะนำว่าต้องติดต่อผู้ใดดำเนินการ</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <sc-for list="{{ providers }}" as="p" hint-placeholder-count="3">
+        <div style="display:flex;gap:14px;align-items:center;border:1px solid #EEE7EF;border-radius:12px;padding:16px 18px">
+          <div style="width:42px;height:42px;border-radius:10px;background:#F8F6F9;display:flex;align-items:center;justify-content:center;font-size:20px;color:#D63384"><i class="bi {{ p.icon }}"></i></div>
+          <div style="display:flex;flex-direction:column;gap:2px"><strong style="font-size:15px">{{ p.name }}</strong><span style="font-size:13px;color:#6E6473">{{ p.desc }}</span></div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <footer style="border-top:1px solid #EEE7EF;background:#FDF2F8">
+    <div style="max-width:1200px;margin:0 auto;padding:48px 24px;display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+      <img src="assets/vec_logo.png" alt="" style="width:52px;height:52px">
+      <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:240px">
+        <strong style="font-size:18px">พร้อมจัดตารางภาคเรียนถัดไป</strong>
+        <span style="font-size:14px;color:#6E6473">ระบบจัดตารางเรียนอาชีวศึกษา · สำนักงานคณะกรรมการการอาชีวศึกษา</span>
+      </div>
+      <button onClick="{{ enterApp }}" style="background:#D63384;color:#fff;border:0;border-radius:10px;padding:13px 22px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#AB296A">เข้าสู่ระบบ</button>
+    </div>
+  </footer>
+</div>
+</sc-if>
+
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="App" style="display:flex;min-height:100vh">
+  <aside style="width:248px;flex-shrink:0;background:#1E1523;color:#E9E1EC;display:flex;flex-direction:column;position:sticky;top:0;height:100vh">
+    <div onClick="{{ goLanding }}" style="display:flex;align-items:center;gap:10px;padding:18px 18px 16px;cursor:pointer;border-bottom:1px solid #33273A">
+      <img src="assets/vec_logo.png" alt="สอศ." style="width:38px;height:38px">
+      <div style="display:flex;flex-direction:column;line-height:1.25"><strong style="font-size:14px;color:#fff">จัดตารางอาชีวศึกษา</strong><span style="font-size:10.5px;color:#A898AE;letter-spacing:.05em">VEC SMART TIMETABLE</span></div>
+    </div>
+    <div style="padding:16px 12px;display:flex;flex-direction:column;gap:2px;flex:1;overflow:auto">
+      <span style="font-size:11px;color:#8C7C93;padding:6px 10px;letter-spacing:.06em">งานจัดตาราง</span>
+      <sc-for list="{{ navMain }}" as="n" hint-placeholder-count="4">
+        <div onClick="{{ n.go }}" style="display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px;background:{{ n.bg }};color:{{ n.fg }}" style-hover="color:#fff"><i class="bi {{ n.icon }}" style="font-size:16px"></i>{{ n.label }}</div>
+      </sc-for>
+      <span style="font-size:11px;color:#8C7C93;padding:16px 10px 6px;letter-spacing:.06em">ข้อมูลและระบบ</span>
+      <sc-for list="{{ navSys }}" as="n" hint-placeholder-count="2">
+        <div onClick="{{ n.go }}" style="display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px;background:{{ n.bg }};color:{{ n.fg }}" style-hover="color:#fff"><i class="bi {{ n.icon }}" style="font-size:16px"></i>{{ n.label }}</div>
+      </sc-for>
+    </div>
+    <div style="margin:12px;padding:14px;border-radius:12px;background:#2A1F30;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#C9BECE"><span style="width:8px;height:8px;border-radius:50%;background:#3DD68C"></span>AI เชื่อมต่อแล้ว · {{ providerName }}</div>
+    </div>
+  </aside>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #EEE7EF;padding:10px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;border:1px solid #EEE7EF;border-radius:8px;padding:2px 4px 2px 10px">
+        <i class="bi bi-building" style="color:#D63384"></i>
+        <select value="{{ school }}" onChange="{{ setSchool }}" style="border:0;background:transparent;font-size:14px;font-weight:600;padding:6px 4px;outline:none;cursor:pointer">
+          <sc-for list="{{ schools }}" as="s" hint-placeholder-count="3"><option value="{{ s.v }}">{{ s.name }}</option></sc-for>
+        </select>
+      </div>
+      <span style="font-size:13px;color:#6E6473;background:#F8F6F9;border-radius:6px;padding:6px 10px">ภาคเรียนที่ 2/2569</span>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#6E6473">บทบาท
+        <select value="{{ role }}" onChange="{{ setRole }}" style="border:1px solid #EEE7EF;border-radius:8px;background:#fff;font-size:13px;padding:7px 8px;cursor:pointer">
+          <option value="admin">ผู้ดูแลระบบสถานศึกษา</option>
+          <option value="scheduler">ผู้จัดตาราง (งานวิชาการ)</option>
+          <option value="teacher">ครูผู้สอน</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:34px;height:34px;border-radius:50%;background:#D63384;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">{{ userInitial }}</div>
+        <div style="display:flex;flex-direction:column;line-height:1.2"><span style="font-size:13px;font-weight:600">{{ userName }}</span><span style="font-size:11px;color:#6E6473">{{ roleLabel }}</span></div>
+      </div>
+    </header>
+
+    <main style="padding:24px;display:flex;flex-direction:column;gap:20px;min-width:0">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:12.5px;color:#6E6473">{{ schoolName }}</span>
+        <h1 style="margin:0;font-size:24px;font-weight:700">{{ pageTitle }}</h1>
+      </div>
+
+      <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+          <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+            <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;padding:18px;display:flex;gap:14px;align-items:center">
+              <div style="width:44px;height:44px;border-radius:10px;background:#FCE7F1;color:#D63384;display:flex;align-items:center;justify-content:center;font-size:20px"><i class="bi {{ s.icon }}"></i></div>
+              <div style="display:flex;flex-direction:column"><span style="font-size:24px;font-weight:700;line-height:1.1">{{ s.value }}</span><span style="font-size:13px;color:#6E6473">{{ s.label }}</span></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px">
+          <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;display:flex;flex-direction:column">
+            <div style="padding:16px 18px;border-bottom:1px solid #EEE7EF;display:flex;align-items:center"><strong style="font-size:15px">ความคืบหน้าการจัดตาราง</strong><div style="flex:1"></div><a href="#" onClick="{{ goSchedule }}" style="font-size:13px">ไปหน้าจัดตาราง</a></div>
+            <div style="padding:8px 18px 16px;display:flex;flex-direction:column">
+              <sc-for list="{{ groupProgress }}" as="g" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) 120px 48px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #F4EFF5;font-size:13.5px">
+                  <span>{{ g.name }}</span>
+                  <div style="height:6px;border-radius:99px;background:#F3EEF4;overflow:hidden"><div style="height:100%;width:{{ g.pct }}%;background:#D63384;border-radius:99px"></div></div>
+                  <span style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6E6473">{{ g.pct }}%</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;display:flex;flex-direction:column">
+            <div style="padding:16px 18px;border-bottom:1px solid #EEE7EF;display:flex;align-items:center;gap:8px"><i class="bi bi-stars" style="color:#D63384"></i><strong style="font-size:15px">ข้อสังเกตจากผู้ช่วย AI</strong></div>
+            <div style="padding:8px 18px 16px;display:flex;flex-direction:column">
+              <sc-for list="{{ alerts }}" as="a" hint-placeholder-count="3">
+                <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #F4EFF5">
+                  <i class="bi {{ a.icon }}" style="color:{{ a.color }};font-size:17px;margin-top:1px"></i>
+                  <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:13.5px;font-weight:600">{{ a.title }}</span><span style="font-size:13px;color:#6E6473;line-height:1.55">{{ a.text }}</span></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSchedule }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <select style="border:1px solid #EEE7EF;border-radius:8px;padding:8px 10px;font-size:14px;font-weight:600;background:#fff">
+            <option>ปวช.1/1 เทคโนโลยีสารสนเทศ (32 คน)</option>
+            <option>ปวช.1/2 เทคโนโลยีสารสนเทศ (35 คน)</option>
+            <option>ปวส.1/1 เทคโนโลยีสารสนเทศ (28 คน)</option>
+          </select>
+          <div style="display:flex;gap:14px;font-size:12.5px;color:#6E6473;flex-wrap:wrap">
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;border:1.5px solid #D63384;background:#fff"></span>ลงด้วยมือ (ล็อก)</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#FCE7F1"></span>AI จัดให้</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#FFF1D6;border:1.5px solid #E0A526"></span>ขัดข้อแนะนำ</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:repeating-linear-gradient(135deg,#EDE6EF 0 3px,#fff 3px 6px)"></span>พัก / นอกเวลา</span>
+          </div>
+          <div style="flex:1"></div>
+          <button onClick="{{ resetSchedule }}" style="background:#fff;border:1px solid #E2D8E4;border-radius:8px;padding:9px 14px;font-size:13.5px;cursor:pointer;display:flex;gap:6px;align-items:center" style-hover="border-color:#D63384"><i class="bi bi-arrow-counterclockwise"></i>เริ่มใหม่</button>
+          <button onClick="{{ runAI }}" disabled="{{ cannotSchedule }}" style="background:#D63384;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;display:flex;gap:7px;align-items:center;opacity:{{ runOpacity }}" style-hover="background:#AB296A"><i class="bi bi-stars"></i>ให้ AI จัดตารางตามนโยบาย</button>
+        </div>
+
+        <sc-if value="{{ teacherNote }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:10px;align-items:center;background:#FFF6E0;color:#7A5410;border-radius:10px;padding:12px 16px;font-size:13.5px"><i class="bi bi-info-circle"></i>บทบาทครูผู้สอนดูตารางได้อย่างเดียว หากต้องการเปลี่ยนคาบ ให้ติดต่อผู้จัดตาราง งานพัฒนาหลักสูตรการเรียนการสอน</div>
+        </sc-if>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start">
+          <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;padding:16px;overflow-x:auto">
+            <div style="min-width:840px;display:grid;grid-template-columns:72px repeat(10,minmax(0,1fr));grid-template-rows:44px repeat(5,84px);gap:4px">
+              <sc-for list="{{ periodHeads }}" as="h" hint-placeholder-count="10">
+                <div style="grid-row:1;grid-column:{{ h.col }};display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11.5px;color:#6E6473;line-height:1.3"><strong style="color:#1D1620;font-size:12px">คาบ {{ h.no }}</strong><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px">{{ h.time }}</span></div>
+              </sc-for>
+              <sc-for list="{{ dayHeads }}" as="d" hint-placeholder-count="5">
+                <div style="grid-column:1;grid-row:{{ d.row }};display:flex;align-items:center;font-size:13.5px;font-weight:600">{{ d.name }}</div>
+              </sc-for>
+              <sc-for list="{{ cells }}" as="c" hint-placeholder-count="50">
+                <div onClick="{{ c.onClick }}" style="grid-column:{{ c.col }};grid-row:{{ c.row }};border-radius:6px;border:1px dashed {{ c.bd }};background:{{ c.bg }};cursor:{{ c.cursor }}" style-hover="border-color:#D63384"></div>
+              </sc-for>
+              <sc-for list="{{ blocks }}" as="e" hint-placeholder-count="3">
+                <div onClick="{{ e.onClick }}" style="grid-column:{{ e.col }};grid-row:{{ e.row }};position:relative;z-index:1;border-radius:7px;padding:6px 8px;background:{{ e.bg }};border:1.5px solid {{ e.bd }};color:{{ e.fg }};box-shadow:{{ e.shadow }};display:flex;flex-direction:column;gap:2px;overflow:hidden;cursor:pointer;min-width:0">
+                  <div style="display:flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;font-size:10px;opacity:.85"><i class="bi {{ e.icon }}"></i><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.code }}</span></div>
+                  <span style="font-size:11.5px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ e.name }}</span>
+                  <span style="font-size:10.5px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.meta }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin-top:12px;font-size:12.5px;color:#6E6473;display:flex;gap:6px;align-items:center"><i class="bi bi-hand-index"></i>คลิกช่องว่างเพื่อลงรายวิชาด้วยมือ · คลิกรายวิชาเพื่อดูรายละเอียด ล็อก หรือลบ</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <sc-if value="{{ isRunning }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#1E1523;color:#F4EEF6;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;align-items:center;gap:8px;font-weight:600"><i class="bi bi-stars" style="color:#F08CBE"></i>AI กำลังจัดตาราง…</div>
+                <div style="height:6px;border-radius:99px;background:#3A2D40;overflow:hidden"><div style="height:100%;width:{{ runPct }}%;background:#D63384;transition:width .4s"></div></div>
+                <sc-for list="{{ runSteps }}" as="r" hint-placeholder-count="5">
+                  <div style="display:flex;gap:8px;font-size:13px;color:{{ r.color }}"><i class="bi {{ r.icon }}"></i>{{ r.text }}</div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ showReport }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid #F1B5D2;border-radius:12px;display:flex;flex-direction:column;overflow:hidden">
+                <div style="padding:14px 16px;background:#FDF2F8;display:flex;flex-direction:column;gap:4px">
+                  <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:14.5px"><i class="bi bi-stars" style="color:#D63384"></i>ผลการจัดตารางโดย AI</div>
+                  <span style="font-size:13px;color:#5A5060">ลงได้ {{ placedHrs }}/{{ needHrs }} ชั่วโมง · ยังลงไม่ได้ {{ unplacedCount }} รายวิชา</span>
+                </div>
+                <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+                  <sc-for list="{{ unplaced }}" as="u" hint-placeholder-count="1">
+                    <div style="display:flex;flex-direction:column;gap:4px;background:#FDECEA;border-radius:8px;padding:10px 12px">
+                      <span style="font-size:13px;font-weight:600;color:#9B2C22">{{ u.name }} · ขาด {{ u.left }} ชม.</span>
+                      <span style="font-size:12.5px;color:#6B3A34;line-height:1.55">{{ u.reason }}</span>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ showSuggestions }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size:12.5px;font-weight:600;color:#6E6473;margin-top:4px">ข้อแนะนำเพื่อให้จัดตารางเสร็จ</span>
+                    <sc-for list="{{ suggestions }}" as="g" hint-placeholder-count="2">
+                      <div style="border:1px solid #EEE7EF;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px">
+                        <div style="display:flex;gap:8px;align-items:center"><span style="font-size:11px;font-weight:600;border-radius:5px;padding:2px 7px;background:{{ g.tagBg }};color:{{ g.tagFg }}">{{ g.tag }}</span><span style="font-size:11.5px;color:#6E6473">{{ g.effect }}</span></div>
+                        <span style="font-size:13px;line-height:1.55">{{ g.text }}</span>
+                        <button onClick="{{ g.apply }}" disabled="{{ cannotSchedule }}" style="align-self:flex-start;background:#fff;color:#D63384;border:1px solid #D63384;border-radius:7px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer" style-hover="background:#FCE7F1">ใช้ข้อแนะนำนี้</button>
+                      </div>
+                    </sc-for>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ showDone }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#E8F5EE;border-radius:12px;padding:14px 16px;display:flex;gap:10px;align-items:flex-start">
+                <i class="bi bi-check-circle-fill" style="color:#198754;font-size:18px"></i>
+                <div style="display:flex;flex-direction:column;gap:3px"><strong style="font-size:14px;color:#0F5132">ลงครบ {{ placedHrs }}/{{ needHrs }} ชั่วโมง</strong><span style="font-size:12.5px;color:#2F6B4A;line-height:1.55">{{ doneNote }}</span></div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ hasPick }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid #D63384;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center"><strong style="font-size:14px">ลงด้วยมือ · {{ pickLabel }}</strong><div style="flex:1"></div><i class="bi bi-x-lg" onClick="{{ clearPick }}" style="cursor:pointer;color:#6E6473"></i></div>
+                <sc-for list="{{ pickOptions }}" as="o" hint-placeholder-count="4">
+                  <div onClick="{{ o.add }}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #EEE7EF;border-radius:8px;cursor:pointer;font-size:13px" style-hover="border-color:#D63384;background:#FDF2F8">
+                    <span style="flex:1;min-width:0">{{ o.name }}</span><span style="font-size:11.5px;color:#6E6473;white-space:nowrap">เหลือ {{ o.left }} ชม.</span>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ pickEmpty }}" hint-placeholder-val="{{ false }}"><span style="font-size:13px;color:#6E6473">ทุกรายวิชาลงครบชั่วโมงแล้ว</span></sc-if>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid #D63384;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6E6473">{{ sel.code }}</span><div style="flex:1"></div><i class="bi bi-x-lg" onClick="{{ clearSel }}" style="cursor:pointer;color:#6E6473"></i></div>
+                <strong style="font-size:14.5px">{{ sel.name }}</strong>
+                <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12.5px"><span style="color:#6E6473">ท-ป-น</span><span>{{ sel.tpn }}</span><span style="color:#6E6473">เวลา</span><span>{{ sel.time }}</span><span style="color:#6E6473">ครู</span><span>{{ sel.teacher }}</span><span style="color:#6E6473">ห้อง</span><span>{{ sel.room }}</span><span style="color:#6E6473">สถานะ</span><span>{{ sel.kind }}</span></div>
+                <sc-if value="{{ sel.warn }}" hint-placeholder-val="{{ false }}"><span style="font-size:12.5px;background:#FFF6E0;color:#7A5410;border-radius:6px;padding:6px 8px">{{ sel.warn }}</span></sc-if>
+                <div style="display:flex;gap:8px;margin-top:4px">
+                  <button onClick="{{ toggleLock }}" disabled="{{ cannotSchedule }}" style="background:#fff;border:1px solid #E2D8E4;border-radius:7px;padding:6px 10px;font-size:12.5px;cursor:pointer;display:flex;gap:5px;align-items:center"><i class="bi {{ sel.lockIcon }}"></i>{{ sel.lockLabel }}</button>
+                  <button onClick="{{ removeSel }}" disabled="{{ cannotSchedule }}" style="background:#fff;border:1px solid #F3C3BD;color:#B02A37;border-radius:7px;padding:6px 10px;font-size:12.5px;cursor:pointer;display:flex;gap:5px;align-items:center"><i class="bi bi-trash3"></i>ลบออกจากตาราง</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;display:flex;flex-direction:column">
+              <div style="padding:14px 16px;border-bottom:1px solid #EEE7EF;display:flex;align-items:center"><strong style="font-size:14px">ตรวจชั่วโมงตาม ท-ป-น</strong><div style="flex:1"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6E6473">{{ placedHrs }}/{{ needHrs }}</span></div>
+              <div style="padding:6px 16px 12px;display:flex;flex-direction:column">
+                <sc-for list="{{ hourCheck }}" as="h" hint-placeholder-count="9">
+                  <div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid #F4EFF5;font-size:12.5px">
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ h.name }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6E6473">{{ h.tpn }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;border-radius:5px;padding:2px 6px;background:{{ h.bg }};color:{{ h.fg }}">{{ h.got }}/{{ h.need }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <sc-if value="{{ showCompliance }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;display:flex;flex-direction:column">
+                <div style="padding:14px 16px;border-bottom:1px solid #EEE7EF"><strong style="font-size:14px">การปฏิบัติตามนโยบาย</strong></div>
+                <div style="padding:6px 16px 12px;display:flex;flex-direction:column">
+                  <sc-for list="{{ compliance }}" as="c" hint-placeholder-count="6">
+                    <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #F4EFF5;font-size:12.5px;line-height:1.5">
+                      <i class="bi {{ c.icon }}" style="color:{{ c.color }}"></i>
+                      <div style="display:flex;flex-direction:column"><span>ข้อ {{ c.no }} · {{ c.short }}</span><span style="color:#6E6473;font-size:11.5px">{{ c.status }}</span></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPolicies }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ policyReadonly }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:10px;align-items:center;background:#FFF6E0;color:#7A5410;border-radius:10px;padding:12px 16px;font-size:13.5px"><i class="bi bi-lock"></i>การเพิ่ม ลด หรือเรียงลำดับนโยบายเป็นสิทธิ์ของผู้ดูแลระบบสถานศึกษา บทบาทของคุณดูได้อย่างเดียว</div>
+        </sc-if>
+        <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;overflow:hidden">
+          <div style="padding:14px 18px;border-bottom:1px solid #EEE7EF;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <strong style="font-size:15px">นโยบายเรียงตามลำดับความสำคัญ</strong>
+            <span style="font-size:12.5px;color:#6E6473">ข้อบังคับ AI ต้องปฏิบัติตาม · ข้อแนะนำ AI จะพยายามปฏิบัติตามลำดับ</span>
+          </div>
+          <sc-for list="{{ policyRows }}" as="p" hint-placeholder-count="7">
+            <div style="display:grid;grid-template-columns:40px minmax(0,1fr) auto auto auto;gap:14px;align-items:center;padding:14px 18px;border-bottom:1px solid #F4EFF5;opacity:{{ p.opacity }}">
+              <span style="width:30px;height:30px;border-radius:8px;background:#FCE7F1;color:#AB296A;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:13px">{{ p.no }}</span>
+              <span style="font-size:14px;line-height:1.6;text-wrap:pretty">{{ p.text }}</span>
+              <div style="display:flex;background:#F3EEF4;border-radius:8px;padding:3px">
+                <button onClick="{{ p.setReq }}" disabled="{{ policyReadonly }}" style="border:0;border-radius:6px;padding:5px 10px;font-size:12.5px;cursor:pointer;background:{{ p.reqBg }};color:{{ p.reqFg }};font-weight:600">ข้อบังคับ</button>
+                <button onClick="{{ p.setRec }}" disabled="{{ policyReadonly }}" style="border:0;border-radius:6px;padding:5px 10px;font-size:12.5px;cursor:pointer;background:{{ p.recBg }};color:{{ p.recFg }};font-weight:600">ข้อแนะนำ</button>
+              </div>
+              <div onClick="{{ p.toggle }}" style="width:38px;height:22px;border-radius:999px;background:{{ p.swBg }};position:relative;cursor:pointer"><div style="position:absolute;top:3px;left:{{ p.swX }};width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s"></div></div>
+              <div style="display:flex;gap:2px;color:#6E6473">
+                <button onClick="{{ p.up }}" disabled="{{ policyReadonly }}" style="border:0;background:transparent;padding:6px;cursor:pointer;color:inherit;font-size:14px" style-hover="color:#D63384"><i class="bi bi-arrow-up"></i></button>
+                <button onClick="{{ p.down }}" disabled="{{ policyReadonly }}" style="border:0;background:transparent;padding:6px;cursor:pointer;color:inherit;font-size:14px" style-hover="color:#D63384"><i class="bi bi-arrow-down"></i></button>
+                <button onClick="{{ p.remove }}" disabled="{{ policyReadonly }}" style="border:0;background:transparent;padding:6px;cursor:pointer;color:inherit;font-size:14px" style-hover="color:#B02A37"><i class="bi bi-trash3"></i></button>
+              </div>
+            </div>
+          </sc-for>
+          <div style="padding:14px 18px;display:flex;gap:10px;align-items:center;background:#FDFBFD;flex-wrap:wrap">
+            <input value="{{ newPolicy }}" onChange="{{ setNewPolicy }}" disabled="{{ policyReadonly }}" placeholder="พิมพ์นโยบายใหม่ เช่น ครูแต่ละคนสอนไม่เกิน 6 ชั่วโมงต่อวัน" style="flex:1;min-width:260px;border:1px solid #E2D8E4;border-radius:8px;padding:10px 12px;font-size:14px;outline:none">
+            <select value="{{ newPolicyType }}" onChange="{{ setNewPolicyType }}" disabled="{{ policyReadonly }}" style="border:1px solid #E2D8E4;border-radius:8px;padding:10px;font-size:14px;background:#fff"><option value="required">ข้อบังคับ</option><option value="recommended">ข้อแนะนำ</option></select>
+            <button onClick="{{ addPolicy }}" disabled="{{ policyReadonly }}" style="background:#D63384;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;display:flex;gap:6px;align-items:center"><i class="bi bi-plus-lg"></i>เพิ่มนโยบาย</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSkills }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:260px"><strong style="font-size:15px">แบ่งรายวิชาให้ครูก่อนจัดตาราง</strong><span style="font-size:13px;color:#6E6473">AI เทียบทักษะการสอน วุฒิการศึกษา ประสบการณ์ และภาระสอนสูงสุดของครู กับเนื้อหารายวิชาในแผนการเรียน</span></div>
+          <button onClick="{{ runSkills }}" disabled="{{ cannotSchedule }}" style="background:#D63384;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;display:flex;gap:7px;align-items:center;opacity:{{ runOpacity }}"><i class="bi bi-stars"></i>{{ skillsBtn }}</button>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start">
+          <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;overflow-x:auto">
+            <div style="min-width:640px">
+              <div style="display:grid;grid-template-columns:minmax(0,1.4fr) 80px minmax(0,1.3fr) minmax(0,1fr);gap:12px;padding:12px 18px;font-size:12.5px;color:#6E6473;border-bottom:1px solid #EEE7EF;background:#FDFBFD"><span>รายวิชา</span><span>ท-ป-น</span><span>ครูที่ AI แนะนำ</span><span>ทางเลือกอื่น</span></div>
+              <sc-for list="{{ skillRows }}" as="r" hint-placeholder-count="9">
+                <div style="display:grid;grid-template-columns:minmax(0,1.4fr) 80px minmax(0,1.3fr) minmax(0,1fr);gap:12px;padding:12px 18px;border-bottom:1px solid #F4EFF5;font-size:13px;align-items:center">
+                  <div style="display:flex;flex-direction:column"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6E6473">{{ r.code }}</span><span style="font-weight:600">{{ r.name }}</span></div>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">{{ r.tpn }}</span>
+                  <sc-if value="{{ skillsRun }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:3px">
+                      <div style="display:flex;align-items:center;gap:8px"><span style="font-weight:600">{{ r.teacher }}</span><span style="font-size:11px;font-weight:600;background:#FCE7F1;color:#AB296A;border-radius:5px;padding:1px 6px">{{ r.score }}%</span></div>
+                      <span style="font-size:11.5px;color:#6E6473;line-height:1.45">{{ r.reason }}</span>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ skillsIdle }}" hint-placeholder-val="{{ true }}"><span style="color:#B3A8B8">—</span></sc-if>
+                  <sc-if value="{{ skillsRun }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:#6E6473">{{ r.alt }}</span></sc-if>
+                  <sc-if value="{{ skillsIdle }}" hint-placeholder-val="{{ true }}"><span style="color:#B3A8B8">—</span></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;display:flex;flex-direction:column">
+            <div style="padding:14px 16px;border-bottom:1px solid #EEE7EF"><strong style="font-size:14px">ภาระสอนหลังแบ่งรายวิชา</strong></div>
+            <div style="padding:8px 16px 14px;display:flex;flex-direction:column">
+              <sc-for list="{{ teacherLoad }}" as="t" hint-placeholder-count="8">
+                <div style="display:flex;flex-direction:column;gap:5px;padding:9px 0;border-bottom:1px solid #F4EFF5">
+                  <div style="display:flex;font-size:12.5px"><span>{{ t.name }}</span><div style="flex:1"></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:{{ t.fg }}">{{ t.hrs }}/{{ t.max }} ชม.</span></div>
+                  <div style="height:5px;border-radius:99px;background:#F3EEF4;overflow:hidden"><div style="height:100%;width:{{ t.pct }}%;background:{{ t.bar }};transition:width .4s"></div></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isData }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <sc-for list="{{ dataTabs }}" as="t" hint-placeholder-count="5">
+            <button onClick="{{ t.go }}" style="border:1px solid {{ t.bd }};background:{{ t.bg }};color:{{ t.fg }};border-radius:8px;padding:8px 14px;font-size:13.5px;font-weight:600;cursor:pointer;display:flex;gap:6px;align-items:center"><i class="bi {{ t.icon }}"></i>{{ t.label }}</button>
+          </sc-for>
+          <div style="flex:1"></div>
+          <button style="background:#fff;border:1px solid #E2D8E4;border-radius:8px;padding:8px 14px;font-size:13.5px;cursor:pointer;display:flex;gap:6px;align-items:center"><i class="bi bi-file-earmark-arrow-down"></i>ดาวน์โหลดแม่แบบ</button>
+          <button style="background:#D63384;color:#fff;border:0;border-radius:8px;padding:9px 14px;font-size:13.5px;font-weight:600;cursor:pointer;display:flex;gap:6px;align-items:center"><i class="bi bi-upload"></i>นำเข้า Excel / CSV</button>
+        </div>
+
+        <sc-if value="{{ tabTeachers }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;overflow-x:auto">
+            <div style="min-width:760px">
+              <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,2fr) 90px;gap:12px;padding:12px 18px;font-size:12.5px;color:#6E6473;border-bottom:1px solid #EEE7EF;background:#FDFBFD"><span>ครูผู้สอน</span><span>แผนก / วุฒิ</span><span>ทักษะการสอน</span><span>ชม.สูงสุด/สัปดาห์</span></div>
+              <sc-for list="{{ teachers }}" as="t" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,2fr) 90px;gap:12px;padding:12px 18px;border-bottom:1px solid #F4EFF5;font-size:13px;align-items:center">
+                  <span style="font-weight:600">{{ t.name }}</span>
+                  <div style="display:flex;flex-direction:column"><span>{{ t.dept }}</span><span style="font-size:11.5px;color:#6E6473">{{ t.degree }}</span></div>
+                  <div style="display:flex;gap:5px;flex-wrap:wrap"><sc-for list="{{ t.skills }}" as="sk" hint-placeholder-count="3"><span style="font-size:11.5px;background:#F3EEF4;border-radius:5px;padding:2px 7px">{{ sk }}</span></sc-for></div>
+                  <span style="font-family:'IBM Plex Mono',monospace">{{ t.max }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabGroups }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;overflow-x:auto">
+            <div style="min-width:760px">
+              <div style="display:grid;grid-template-columns:minmax(0,1.3fr) 80px 90px minmax(0,1fr) minmax(0,1.3fr);gap:12px;padding:12px 18px;font-size:12.5px;color:#6E6473;border-bottom:1px solid #EEE7EF;background:#FDFBFD"><span>กลุ่มผู้เรียน</span><span>ระดับ</span><span>ผู้เรียน</span><span>ครูที่ปรึกษา</span><span>ข้อสังเกตขนาดห้อง</span></div>
+              <sc-for list="{{ groups }}" as="g" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:minmax(0,1.3fr) 80px 90px minmax(0,1fr) minmax(0,1.3fr);gap:12px;padding:12px 18px;border-bottom:1px solid #F4EFF5;font-size:13px;align-items:center">
+                  <span style="font-weight:600">{{ g.name }}</span><span>{{ g.level }}</span><span style="font-family:'IBM Plex Mono',monospace">{{ g.n }} คน</span><span>{{ g.advisor }}</span><span style="font-size:12px;color:{{ g.noteFg }}">{{ g.note }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabPlans }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+            <sc-for list="{{ plans }}" as="p" hint-placeholder-count="4">
+              <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px">
+                <span style="font-size:12px;color:#6E6473">{{ p.term }}</span>
+                <strong style="font-size:15px">{{ p.name }}</strong>
+                <div style="display:flex;gap:18px;font-size:13px"><span><b>{{ p.subjects }}</b> รายวิชา</span><span><b>{{ p.hrs }}</b> ชม./สัปดาห์</span><span><b>{{ p.credits }}</b> หน่วยกิต</span></div>
+                <span style="font-size:12.5px;color:#6E6473">ใช้กับ: {{ p.groups }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabSubjects }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;overflow-x:auto">
+            <div style="min-width:680px">
+              <div style="display:grid;grid-template-columns:120px minmax(0,2fr) 44px 44px 44px 100px;gap:12px;padding:12px 18px;font-size:12.5px;color:#6E6473;border-bottom:1px solid #EEE7EF;background:#FDFBFD"><span>รหัสวิชา</span><span>ชื่อรายวิชา</span><span>ท</span><span>ป</span><span>น</span><span>ชม./สัปดาห์</span></div>
+              <sc-for list="{{ subjectRows }}" as="s" hint-placeholder-count="9">
+                <div style="display:grid;grid-template-columns:120px minmax(0,2fr) 44px 44px 44px 100px;gap:12px;padding:11px 18px;border-bottom:1px solid #F4EFF5;font-size:13px;align-items:center">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">{{ s.code }}</span><span>{{ s.name }}</span><span>{{ s.t }}</span><span>{{ s.p }}</span><span>{{ s.n }}</span><span style="font-weight:600">{{ s.hrs }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabRooms }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;align-items:start">
+            <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;overflow:hidden">
+              <div style="padding:14px 18px;border-bottom:1px solid #EEE7EF;display:flex;align-items:center"><strong style="font-size:14px">อาคารเรียนและพิกัด</strong><div style="flex:1"></div><span style="font-size:12px;color:#6E6473">ระยะเดินจากอาคาร 1</span></div>
+              <sc-for list="{{ buildings }}" as="b" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:11px 18px;border-bottom:1px solid #F4EFF5;font-size:13px;align-items:center">
+                  <div style="display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">{{ b.name }}</span><span style="font-size:11.5px;color:#6E6473;font-family:'IBM Plex Mono',monospace">{{ b.campus }} · {{ b.lat }}, {{ b.lng }}</span></div>
+                  <span style="font-size:12px;border-radius:5px;padding:2px 8px;background:{{ b.bg }};color:{{ b.fg }}">{{ b.dist }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;padding:14px 18px;display:flex;flex-direction:column;gap:10px">
+                <strong style="font-size:14px">ตำแหน่งอาคาร (ตามพิกัด)</strong>
+                <div style="position:relative;height:220px;border-radius:10px;background:#FDFBFD;border:1px solid #EEE7EF;background-image:linear-gradient(#F1ECF2 1px,transparent 1px),linear-gradient(90deg,#F1ECF2 1px,transparent 1px);background-size:28px 28px">
+                  <sc-for list="{{ buildings }}" as="b" hint-placeholder-count="5">
+                    <div style="position:absolute;left:{{ b.x }}%;top:{{ b.y }}%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px">
+                      <span style="width:12px;height:12px;border-radius:50%;background:{{ b.dot }};border:2px solid #fff;box-shadow:0 0 0 1px {{ b.dot }}"></span>
+                      <span style="font-size:10.5px;white-space:nowrap;background:#fff;border-radius:4px;padding:0 4px">{{ b.short }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <span style="font-size:12px;color:#6E6473">วิทยาเขตหลักกับวิทยาเขต 2 ห่างกัน 1.8 กม. AI จะเตือนเมื่อคาบติดกันต้องย้ายวิทยาเขต</span>
+              </div>
+              <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;overflow:hidden">
+                <div style="padding:14px 18px;border-bottom:1px solid #EEE7EF"><strong style="font-size:14px">ห้องเรียน</strong></div>
+                <sc-for list="{{ rooms }}" as="r" hint-placeholder-count="6">
+                  <div style="display:grid;grid-template-columns:90px minmax(0,1fr) 70px;gap:10px;padding:10px 18px;border-bottom:1px solid #F4EFF5;font-size:13px">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">{{ r.code }}</span><span>{{ r.type }}</span><span style="text-align:right">{{ r.cap }} ที่</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ isAI }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ aiReadonly }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:10px;align-items:center;background:#FFF6E0;color:#7A5410;border-radius:10px;padding:12px 16px;font-size:13.5px"><i class="bi bi-lock"></i>การตั้งค่าการเชื่อมต่อ AI เป็นสิทธิ์ของผู้ดูแลระบบสถานศึกษา</div>
+        </sc-if>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+          <sc-for list="{{ providerCards }}" as="p" hint-placeholder-count="3">
+            <div onClick="{{ p.pick }}" style="background:#fff;border:1.5px solid {{ p.bd }};border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px;cursor:pointer">
+              <div style="display:flex;align-items:center;gap:10px"><i class="bi {{ p.icon }}" style="font-size:20px;color:#D63384"></i><strong style="font-size:14.5px">{{ p.name }}</strong><div style="flex:1"></div><i class="bi {{ p.check }}" style="color:#D63384"></i></div>
+              <span style="font-size:12.5px;color:#6E6473;line-height:1.5">{{ p.desc }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;align-items:start">
+          <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px">
+            <strong style="font-size:15px">การเชื่อมต่อ · {{ providerName }}</strong>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#5A5060">Base URL<input value="{{ providerUrl }}" readOnly="{{ true }}" style="border:1px solid #E2D8E4;border-radius:8px;padding:10px 12px;font-size:13.5px;font-family:'IBM Plex Mono',monospace;background:#FDFBFD"></label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#5A5060">API Key<input type="password" value="sk-xxxxxxxxxxxxxxxxxxxx" readOnly="{{ true }}" style="border:1px solid #E2D8E4;border-radius:8px;padding:10px 12px;font-size:13.5px;font-family:'IBM Plex Mono',monospace"></label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#5A5060">โมเดล<select style="border:1px solid #E2D8E4;border-radius:8px;padding:10px 12px;font-size:13.5px;background:#fff"><sc-for list="{{ providerModels }}" as="m" hint-placeholder-count="3"><option>{{ m }}</option></sc-for></select></label>
+            <div style="display:flex;gap:10px;align-items:center">
+              <button onClick="{{ testConn }}" disabled="{{ aiReadonly }}" style="background:#D63384;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer">ทดสอบการเชื่อมต่อ</button>
+              <span style="font-size:13px;color:{{ testFg }}">{{ testText }}</span>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #EEE7EF;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:4px">
+            <strong style="font-size:15px;margin-bottom:8px">ขอบเขตการทำงานของผู้ช่วย AI</strong>
+            <sc-for list="{{ aiPerms }}" as="p" hint-placeholder-count="4">
+              <div style="display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #F4EFF5">
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px">{{ p.label }}</span><span style="font-size:12px;color:#6E6473">{{ p.sub }}</span></div>
+                <div onClick="{{ p.toggle }}" style="width:38px;height:22px;border-radius:999px;background:{{ p.swBg }};position:relative;cursor:pointer;flex-shrink:0"><div style="position:absolute;top:3px;left:{{ p.swX }};width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s"></div></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </main>
+  </div>
+
+  <sc-if value="{{ chatOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;top:0;right:0;bottom:0;width:390px;max-width:100vw;background:#fff;border-left:1px solid #EEE7EF;box-shadow:-20px 0 50px -20px rgba(30,21,35,.25);z-index:20;display:flex;flex-direction:column">
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #EEE7EF">
+        <div style="width:34px;height:34px;border-radius:10px;background:#D63384;color:#fff;display:flex;align-items:center;justify-content:center"><i class="bi bi-stars"></i></div>
+        <div style="display:flex;flex-direction:column;line-height:1.3;flex:1"><strong style="font-size:14px">ผู้ช่วย AI</strong><span style="font-size:11.5px;color:#6E6473">ทำงานในสิทธิ์ของ: {{ roleLabel }}</span></div>
+        <i class="bi bi-x-lg" onClick="{{ closeChat }}" style="cursor:pointer;color:#6E6473;font-size:16px"></i>
+      </div>
+      <div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:#FDFBFD">
+        <sc-for list="{{ msgs }}" as="m" hint-placeholder-count="1">
+          <sc-if value="{{ m.ai }}" hint-placeholder-val="{{ true }}">
+            <div style="align-self:flex-start;max-width:88%;background:#fff;border:1px solid #EEE7EF;border-radius:4px 14px 14px 14px;padding:10px 13px;font-size:13.5px;line-height:1.6;white-space:pre-line">{{ m.text }}</div>
+          </sc-if>
+          <sc-if value="{{ m.me }}" hint-placeholder-val="{{ false }}">
+            <div style="align-self:flex-end;max-width:85%;background:#D63384;color:#fff;border-radius:14px 4px 14px 14px;padding:10px 13px;font-size:13.5px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere">{{ m.text }}</div>
+          </sc-if>
+        </sc-for>
+      </div>
+      <div style="padding:10px 16px 0;display:flex;gap:6px;flex-wrap:wrap">
+        <sc-for list="{{ quickPrompts }}" as="q" hint-placeholder-count="3">
+          <button onClick="{{ q.send }}" style="border:1px solid #F1B5D2;background:#FDF2F8;color:#AB296A;border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer" style-hover="background:#FCE7F1">{{ q.text }}</button>
+        </sc-for>
+      </div>
+      <div style="padding:12px 16px 14px;display:flex;flex-direction:column;gap:6px">
+        <div style="border:1.5px solid {{ inputBd }};border-radius:14px;background:#fff;display:flex;flex-direction:column;transition:border-color .15s">
+          <textarea ref="{{ taRef }}" rows="1" value="{{ input }}" onChange="{{ setInput }}" onKeyDown="{{ inputKey }}" placeholder="พิมพ์หรือกดไมค์เพื่อพูด อธิบายยาว ๆ ได้ เช่น ภาคเรียนนี้ครูณัฐวุฒิลาคลอดช่วงกลางภาค ต้องการให้…" style="border:0;resize:none;outline:none;padding:12px 14px 4px;font-size:13.5px;line-height:1.6;min-height:48px;max-height:240px;overflow-y:auto;background:transparent;border-radius:14px;color:#1D1620"></textarea>
+          <sc-if value="{{ hasInterim }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:0 14px 4px;font-size:13px;line-height:1.6;color:#AB296A;font-style:italic">{{ interim }}…</div>
+          </sc-if>
+          <div style="display:flex;align-items:center;gap:6px;padding:4px 8px 8px 14px">
+            <sc-if value="{{ listening }}" hint-placeholder-val="{{ false }}">
+              <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#B02A37;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:#DC3545"></span>กำลังฟัง (ภาษาไทย)…</span>
+            </sc-if>
+            <sc-if value="{{ notListening }}" hint-placeholder-val="{{ true }}">
+              <span style="font-size:11.5px;color:#9A8FA0;font-family:'IBM Plex Mono',monospace">{{ charCount }}</span>
+            </sc-if>
+            <div style="flex:1"></div>
+            <button onClick="{{ toggleMic }}" title="พิมพ์ด้วยเสียง" style="width:36px;height:36px;border-radius:50%;border:0;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;background:{{ micBg }};color:{{ micFg }};animation:{{ micAnim }}"><i class="bi {{ micIcon }}"></i></button>
+            <button onClick="{{ sendInput }}" title="ส่ง" style="width:36px;height:36px;border-radius:50%;border:0;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;background:#D63384;color:#fff" style-hover="background:#AB296A"><i class="bi bi-send-fill"></i></button>
+          </div>
+        </div>
+        <span style="font-size:11px;color:#9A8FA0;text-align:center">Enter ส่ง · Shift + Enter ขึ้นบรรทัดใหม่ · เสียงแปลงเป็นข้อความโดยเบราว์เซอร์</span>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ showFab }}" hint-placeholder-val="{{ false }}">{{ fab }}</sc-if>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;landing&quot;,&quot;app&quot;],&quot;default&quot;:&quot;landing&quot;,&quot;tsType&quot;:&quot;'landing'|'app'&quot;},&quot;defaultRole&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;admin&quot;,&quot;scheduler&quot;,&quot;teacher&quot;],&quot;default&quot;:&quot;scheduler&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  S = {
+    thai:{code:'20000-1101',name:'ภาษาไทยเพื่ออาชีพ',t:1,p:0,n:1,teacher:'ครูสุนิสา แก้วมณี',room:'1-204'},
+    eng:{code:'20000-1201',name:'ภาษาอังกฤษในชีวิตจริง',t:0,p:2,n:1,teacher:'ครูพิมพ์ชนก ศรีสุข',room:'1-205'},
+    math:{code:'20000-1401',name:'คณิตศาสตร์เพื่องานอาชีพ',t:2,p:0,n:2,teacher:'ครูวีระพงษ์ ทองดี',room:'1-204'},
+    sci:{code:'20000-1301',name:'วิทยาศาสตร์เพื่อพัฒนาทักษะชีวิต',t:1,p:2,n:2,teacher:'ครูอรทัย บุญมา',room:'SCI-201 วข.2'},
+    comp:{code:'20001-2001',name:'คอมพิวเตอร์และสารสนเทศเพื่องานอาชีพ',t:1,p:2,n:2,teacher:'ครูธนากร ใจงาม',room:'5-301'},
+    prog:{code:'20901-2002',name:'การเขียนโปรแกรมเบื้องต้น',t:1,p:3,n:2,teacher:'ครูณัฐวุฒิ พรหมมา',room:'5-302'},
+    os:{code:'20901-2003',name:'ระบบปฏิบัติการเบื้องต้น',t:1,p:3,n:2,teacher:'ครูณัฐวุฒิ พรหมมา',room:'5-302'},
+    gfx:{code:'20901-2004',name:'คอมพิวเตอร์กราฟิกเบื้องต้น',t:1,p:4,n:3,teacher:'ครูกมลชนก วงศ์ใหญ่',room:'5-301'},
+    scout:{code:'20000-2001',name:'กิจกรรมลูกเสือวิสามัญ 1',t:0,p:2,n:0,teacher:'ครูสมชาย รักชาติ',room:'ลานกิจกรรม'}
+  };
+  ORDER = ['thai','eng','math','sci','comp','prog','os','gfx','scout'];
+  DAYS = ['จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์'];
+  TIMES = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'];
+  INIT = [{d:0,s:1,l:2,k:'prog',m:1},{d:1,s:1,l:1,k:'thai',m:1},{d:2,s:7,l:2,k:'scout',m:1}];
+  PARTIAL_AI = [{d:0,s:3,l:1,k:'math'},{d:0,s:5,l:2,k:'gfx'},{d:1,s:2,l:2,k:'eng'},{d:1,s:5,l:2,k:'prog'},{d:2,s:1,l:3,k:'comp'},{d:3,s:1,l:2,k:'os'},{d:3,s:3,l:1,k:'math'},{d:3,s:5,l:2,k:'os'},{d:4,s:1,l:3,k:'gfx'}];
+  FINAL_A = [{d:0,s:1,l:3,k:'sci',w:'ย้ายวิทยาเขตหลังคาบนี้ 1.8 กม. (~8 นาที) มีพักกลางวันรองรับ'},{d:0,s:5,l:2,k:'gfx'},{d:0,s:7,l:1,k:'math'},{d:1,s:1,l:1,k:'thai',m:1},{d:1,s:2,l:2,k:'eng'},{d:1,s:5,l:2,k:'prog',m:1,moved:1},{d:2,s:1,l:3,k:'comp'},{d:2,s:7,l:2,k:'scout',m:1},{d:3,s:1,l:2,k:'os'},{d:3,s:3,l:1,k:'math'},{d:3,s:5,l:2,k:'os'},{d:3,s:7,l:2,k:'prog'},{d:4,s:1,l:3,k:'gfx'}];
+  POL = [
+    {id:1,short:'ปวช. ไม่เว้นคาบว่างช่วงเช้า',text:'ตารางนักเรียนระดับ ปวช. จะต้องไม่มีการเว้นคาบว่างในช่วงเช้า',type:'required',on:true},
+    {id:2,short:'ปวช. พักกลางวัน 11–12 น.',text:'นักเรียน ปวช. จะต้องพักกลางวันเวลา 11–12 น.',type:'required',on:true},
+    {id:3,short:'ปวส./ป.ตรี พักกลางวัน 12–13 น.',text:'นักศึกษาระดับ ปวส. และปริญญาตรีจะต้องพักกลางวันเวลา 12–13 น.',type:'required',on:true},
+    {id:4,short:'ปวช. เลิกเรียนไม่เกิน 17 น.',text:'นักเรียน ปวช. จะมีคาบเรียนสุดท้ายได้ไม่เกิน 17 น.',type:'required',on:true},
+    {id:5,short:'แบ่งครึ่งวิชาหลายชั่วโมง',text:'หากวิชาที่มีหลายชั่วโมงไม่สามารถลงได้หมด ให้พยายามแบ่งครึ่ง เช่น รายวิชา 4 ชั่วโมงควรแบ่งเป็นคาบละ 2 ชั่วโมง รายวิชา 5 ชั่วโมงควรแบ่งเป็นคาบละ 2 และ 3',type:'recommended',on:true},
+    {id:6,short:'แบ่งคาบย่อยไม่เกิน 3 ส่วน',text:'รายวิชาที่มีหลายชั่วโมงสามารถแบ่งเป็นคาบย่อย ๆ ได้ไม่เกิน 3 ส่วน',type:'required',on:true},
+    {id:7,short:'ระยะเดินทางระหว่างคาบ',text:'คาบติดกันที่ต้องย้ายอาคารหรือวิทยาเขต ไม่ควรใช้เวลาเดินทางเกิน 10 นาที',type:'recommended',on:true}
+  ];
+  state = {
+    view: this.props.startScreen === 'app' ? 'app' : 'landing',
+    page: 'dashboard', role: this.props.defaultRole || 'scheduler', school: '0', dataTab: 'teachers',
+    policies: this.POL.map(p => ({...p})), entries: this.INIT.map(e => ({...e})),
+    phase: 'manual', runStep: 0, pick: null, sel: null, applied: null,
+    skillsRun: false, provider: 'openrouter', test: 'idle',
+    perms: {act:true, confirm:true, suggest:true, log:true},
+    chatOpen: false, input: '', newPolicy: '', newPolicyType: 'recommended',
+    msgs: [{ai:1, text:'สวัสดีค่ะ ฉันเป็นผู้ช่วย AI ของระบบจัดตาราง สั่งงานได้ตามสิทธิ์ของบทบาทคุณ เช่น จัดตารางอัตโนมัติ วิเคราะห์ทักษะครู หรือตรวจขนาดห้องเรียน'}]
+  };
+
+  need(k){ const s=this.S[k]; return s.t+s.p; }
+  used(entries,k){ return entries.filter(e=>e.k===k).reduce((a,e)=>a+e.l,0); }
+  occ(entries,d,p){ return entries.find(e=>e.d===d && p>=e.s && p<e.s+e.l); }
+  blocked(d,p){ return p===4 || p===10; }
+  canSchedule(){ return this.state.role !== 'teacher'; }
+
+  go = page => this.setState({page, pick:null, sel:null});
+
+  runAI = (after) => {
+    if (!this.canSchedule() || this.state.phase==='running') return;
+    this.setState({page:'schedule', phase:'running', runStep:0, pick:null, sel:null, applied:null});
+    let i = 0;
+    clearInterval(this._iv);
+    this._iv = setInterval(() => {
+      i++; this.setState({runStep:i});
+      if (i >= 5) {
+        clearInterval(this._iv);
+        const manual = this.state.entries.filter(e=>e.m);
+        const res = manual.map(e=>({...e}));
+        this.PARTIAL_AI.forEach(e => {
+          let ok = true;
+          for (let p=e.s;p<e.s+e.l;p++) if (this.occ(res,e.d,p)) ok=false;
+          if (ok && this.used(res,e.k)+e.l <= this.need(e.k)) res.push({...e});
+        });
+        const left = this.ORDER.reduce((a,k)=>a+Math.max(0,this.need(k)-this.used(res,k)),0);
+        this.setState({entries:res, phase: left? 'partial':'done'});
+        if (typeof after === 'function') after(left);
+      }
+    }, 550);
+  };
+  componentWillUnmount(){ clearInterval(this._iv); if (this._rec) try{ this._rec.abort(); }catch(e){} }
+  taRef = React.createRef();
+  componentDidUpdate(){ const ta=this.taRef.current; if(ta){ ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,240)+'px'; } }
+
+  toggleMic = () => {
+    if (this.state.listening) { this._rec && this._rec.stop(); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const push = (m) => this.setState(s=>({msgs:[...s.msgs,{ai:1,text:m}]}));
+    if (!SR) return push('เบราว์เซอร์นี้ยังไม่รองรับการพิมพ์ด้วยเสียง แนะนำให้ใช้ Google Chrome หรือ Microsoft Edge ค่ะ');
+    const rec = new SR(); this._rec = rec;
+    rec.lang = 'th-TH'; rec.continuous = true; rec.interimResults = true;
+    const base = this.state.input;
+    rec.onresult = (e) => {
+      let fin = '', interim = '';
+      for (let i=0;i<e.results.length;i++){ const t=e.results[i][0].transcript; if (e.results[i].isFinal) fin+=t; else interim+=t; }
+      this.setState({input: base + (base && fin && !/\s$/.test(base) ? ' ' : '') + fin, interim});
+    };
+    rec.onerror = (e) => { if (e.error==='not-allowed' || e.error==='service-not-allowed') push('ไม่ได้รับอนุญาตให้ใช้ไมโครโฟน กรุณาอนุญาตการเข้าถึงไมโครโฟนในเบราว์เซอร์ค่ะ'); };
+    rec.onend = () => this.setState(s=>({listening:false, interim:'', input: s.interim ? s.input + (s.input?' ':'') + s.interim : s.input}));
+    try { rec.start(); this.setState({listening:true}); } catch(e) {}
+  };
+
+  buildFab(){
+    const h = React.createElement;
+    const svg = '<svg viewBox="0 0 64 64" width="52" height="52" xmlns="http://www.w3.org/2000/svg">'
+      + '<rect x="9" y="13" width="46" height="42" rx="10" fill="#fff"/>'
+      + '<path d="M9 23 a10 10 0 0 1 10 -10 h26 a10 10 0 0 1 10 10 v4 h-46z" fill="#FFB3D6"/>'
+      + '<rect x="19" y="7" width="5" height="12" rx="2.5" fill="#7A1E4F"/><rect x="40" y="7" width="5" height="12" rx="2.5" fill="#7A1E4F"/>'
+      + '<g style="transform-origin:32px 35px;animation:fabBlink 4s infinite"><ellipse cx="24.5" cy="35" rx="3" ry="3.6" fill="#2A1530"/><ellipse cx="39.5" cy="35" rx="3" ry="3.6" fill="#2A1530"/>'
+      + '<circle cx="25.6" cy="33.7" r="1.1" fill="#fff"/><circle cx="40.6" cy="33.7" r="1.1" fill="#fff"/></g>'
+      + '<ellipse cx="18.5" cy="41" rx="3.2" ry="1.9" fill="#F7A1C8"/><ellipse cx="45.5" cy="41" rx="3.2" ry="1.9" fill="#F7A1C8"/>'
+      + '<path d="M28 41 Q32 45 36 41" stroke="#2A1530" stroke-width="2.2" fill="none" stroke-linecap="round"/>'
+      + '<rect x="15" y="47" width="9" height="4" rx="1.5" fill="#FCE7F1"/><rect x="27.5" y="47" width="9" height="4" rx="1.5" fill="#F9C6DE"/><rect x="40" y="47" width="9" height="4" rx="1.5" fill="#FCE7F1"/>'
+      + '</svg>';
+    const star = (style, size, color, delay) => h('svg', {key:style.top+style.left, viewBox:'0 0 24 24', width:size, height:size, style:Object.assign({position:'absolute', pointerEvents:'none', animation:'fabTwinkle 2.4s ease-in-out '+delay+'s infinite'}, style)},
+      h('path', {d:'M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10Z', fill:color}));
+    const hover = this.state.fabHover;
+    return h('div', {style:{position:'fixed', right:28, bottom:28, zIndex:30, display:'flex', alignItems:'center', gap:12}},
+      h('div', {style:{background:'#1E1523', color:'#fff', fontSize:13, fontWeight:600, padding:'8px 12px', borderRadius:10, whiteSpace:'nowrap', boxShadow:'0 8px 20px -8px rgba(30,21,35,.4)', opacity:hover?1:0, transform:hover?'translateX(0)':'translateX(8px)', transition:'all .2s', pointerEvents:'none'}}, 'ถามผู้ช่วย AI · พิมพ์หรือพูดได้'),
+      h('div', {style:{position:'relative', animation:'fabBob 3.2s ease-in-out infinite'}},
+        star({top:-10, left:-8}, 16, '#FFD76A', 0),
+        star({top:-4, right:-10}, 11, '#FFFFFF', .8),
+        star({bottom:-2, left:-12}, 10, '#FFB3D6', 1.6),
+        h('button', {onClick:()=>this.setState({chatOpen:true, fabHover:false}), onMouseEnter:()=>this.setState({fabHover:true}), onMouseLeave:()=>this.setState({fabHover:false}), 'aria-label':'เปิดผู้ช่วย AI',
+          style:{position:'relative', width:76, height:76, borderRadius:'50%', border:'3px solid #fff', cursor:'pointer', padding:0, overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center',
+            background:'radial-gradient(circle at 30% 25%, #FF8CC6 0%, #D63384 55%, #9C1B5C 100%)', animation:'fabGlow 2.6s ease-in-out infinite', transform:hover?'scale(1.08)':'scale(1)', transition:'transform .2s'}},
+          h('span', {style:{display:'flex'}, dangerouslySetInnerHTML:{__html:svg}}),
+          h('span', {style:{position:'absolute', top:'-20%', left:0, width:'38%', height:'140%', background:'linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.75), rgba(255,255,255,0))', animation:'fabShine 3.5s ease-in-out infinite', pointerEvents:'none'}}),
+          h('span', {style:{position:'absolute', top:5, left:14, width:22, height:10, borderRadius:'50%', background:'rgba(255,255,255,.35)', transform:'rotate(-25deg)', pointerEvents:'none'}})
+        ),
+        h('span', {style:{position:'absolute', top:0, right:0, width:20, height:20, borderRadius:'50%', background:'#fff', color:'#D63384', fontSize:11, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 2px 6px rgba(0,0,0,.15)', pointerEvents:'none'}}, h('i', {className:'bi bi-stars'}))
+      )
+    );
+  }
+
+  apply = (which) => {
+    if (!this.canSchedule()) return;
+    if (which==='A') this.setState({entries:this.FINAL_A.map(e=>({...e})), phase:'done', applied:'A', sel:null, pick:null});
+    else this.setState(s => ({entries:[...s.entries, {d:4,s:8,l:3,k:'sci',w:'เลิกเรียน 18:00 น. ขัดนโยบายข้อ 4 (ปรับเป็นข้อแนะนำแล้ว)'}], phase:'done', applied:'B', sel:null, pick:null,
+      policies: s.policies.map(p=>p.id===4?{...p,type:'recommended'}:p)}));
+  };
+
+  addManual(k){
+    const {pick, entries} = this.state; if (!pick) return;
+    const left = this.need(k)-this.used(entries,k);
+    let l=0; while (l<Math.min(left,3) && l<2) { const p=pick.p+l; if (p>10||this.blocked(pick.d,p)||this.occ(entries,pick.d,p)) break; l++; }
+    if (!l) return;
+    this.setState({entries:[...entries,{d:pick.d,s:pick.p,l,k,m:1}], pick:null});
+  }
+
+  reply(text){
+    const role = this.state.role, t = text;
+    const push = (m) => this.setState(s=>({msgs:[...s.msgs,{ai:1,text:m}]}));
+    if (/จัด.*ตาราง|อัตโนมัติ/.test(t) && !/ของฉัน/.test(t)) {
+      if (!this.canSchedule()) return push('บทบาทครูผู้สอนไม่มีสิทธิ์จัดหรือแก้ไขตาราง กรุณาติดต่อผู้จัดตาราง งานพัฒนาหลักสูตรการเรียนการสอน ฝ่ายวิชาการ (ครูปรียา สายสุวรรณ โทร. 1204)\n\nระหว่างนี้ฉันช่วยสรุปตารางสอนของคุณ หรือร่างคำขอเปลี่ยนคาบเพื่อส่งให้ผู้จัดตารางได้ค่ะ');
+      push('เริ่มจัดตาราง ปวช.1/1 เทคโนโลยีสารสนเทศ ตามนโยบาย '+this.state.policies.filter(p=>p.on).length+' ข้อ โดยคงรายการที่ลงด้วยมือไว้…');
+      return this.runAI(left => push(left ? 'จัดได้ '+(26-left)+'/26 ชั่วโมง ยังลงวิชาวิทยาศาสตร์ไม่ได้ '+left+' ชม. เพราะครูอรทัยและห้อง SCI-201 ว่างตรงกันเฉพาะวันจันทร์เช้า ซึ่งมีวิชาที่ลงด้วยมือไว้\n\nข้อแนะนำอยู่ในแผงด้านขวาของตาราง เลือกใช้ได้ทันทีค่ะ' : 'จัดตารางครบทุกรายวิชาและไม่ขัดนโยบายข้อบังคับค่ะ'));
+    }
+    if (/นโยบาย/.test(t)) {
+      if (role!=='admin') { this.go('policies'); return push('การเพิ่ม ลด หรือเปลี่ยนนโยบายเป็นสิทธิ์ของผู้ดูแลระบบสถานศึกษา กรุณาติดต่อ นายวิชัย ศรีประเสริฐ (ผู้ดูแลระบบ) ฉันเปิดหน้านโยบายให้ดูแบบอ่านอย่างเดียว และช่วยร่างข้อความนโยบายที่ต้องการเสนอได้ค่ะ'); }
+      if (/เพิ่ม/.test(t)) {
+        const txt = t.replace(/.*เพิ่มนโยบาย\s*/,'').trim() || 'ครูแต่ละคนสอนไม่เกิน 6 ชั่วโมงต่อวัน';
+        this.setState(s=>({page:'policies', policies:[...s.policies,{id:Date.now(),short:txt,text:txt,type:'recommended',on:true}]}));
+        return push('เพิ่มนโยบาย “'+txt+'” เป็นข้อแนะนำลำดับสุดท้ายแล้ว ปรับเป็นข้อบังคับหรือเลื่อนลำดับได้ในหน้านโยบายค่ะ');
+      }
+      this.go('policies'); return push('เปิดหน้านโยบายให้แล้ว พิมพ์ “เพิ่มนโยบาย …” ตามด้วยข้อความ ฉันจะเพิ่มให้ค่ะ');
+    }
+    if (/ทักษะ|แบ่ง.*วิชา|วิเคราะห์/.test(t)) {
+      if (!this.canSchedule()) return push('การแบ่งรายวิชาให้ครูเป็นงานของหัวหน้าแผนกวิชาและผู้จัดตาราง หากต้องการอัปเดตทักษะการสอนของคุณ ส่งข้อมูลให้หัวหน้าแผนกเทคโนโลยีสารสนเทศได้ค่ะ');
+      this.setState({page:'skills', skillsRun:true});
+      return push('วิเคราะห์ทักษะครู 8 คนเทียบกับ 9 รายวิชาแล้ว ทุกวิชามีครูที่เหมาะสมเกิน 80% ครูณัฐวุฒิมีภาระ 16/18 ชม. ใกล้เต็ม แนะนำให้ครูธนากรรับวิชาระบบปฏิบัติการเป็นทางเลือกสำรองค่ะ');
+    }
+    if (/ห้อง|ขนาด/.test(t)) return push('ปวช.1/1 มีผู้เรียน 32 คน แต่ห้อง 1-204 จุ 30 ที่นั่ง ใช้สอนภาษาไทยและคณิตศาสตร์ แนะนำเปลี่ยนเป็นห้อง 1-301 (40 ที่นั่ง) ซึ่งว่างในคาบเดียวกันค่ะ');
+    if (/ของฉัน|ตารางสอน|ชั่วโมงสอน/.test(t)) return push('ตารางสอนของครูณัฐวุฒิ ภาคเรียนที่ 2/2569: 16 ชั่วโมง/สัปดาห์ ใน 4 กลุ่มผู้เรียน สอนที่อาคาร 5 ทั้งหมด ไม่มีคาบที่ต้องย้ายวิทยาเขตค่ะ');
+    const can = role==='teacher' ? 'ดูและสรุปตารางสอน ตรวจขนาดห้อง ร่างคำขอเปลี่ยนคาบ' : role==='admin' ? 'จัดตาราง วิเคราะห์ทักษะครู เพิ่มหรือแก้นโยบาย ตั้งค่า AI' : 'จัดตารางอัตโนมัติ ลงตารางด้วยมือ วิเคราะห์ทักษะครู ตรวจขนาดห้อง';
+    if (t.length > 140) {
+      const parts = t.split(/[\n.。]|และ|แล้ว|จากนั้น/).map(x=>x.trim()).filter(x=>x.length>8).slice(0,4);
+      return push('รับคำอธิบาย '+t.length+' ตัวอักษรแล้ว สรุปเป็นงานย่อยดังนี้\n'+parts.map((p,i)=>(i+1)+'. '+p).join('\n')+'\n\nงานที่อยู่ในสิทธิ์ '+roleLabelOf(role)+' ฉันจะเตรียมการเปลี่ยนแปลงให้ตรวจก่อนบันทึก ส่วนที่เกินสิทธิ์จะแจ้งผู้ที่ต้องติดต่อค่ะ');
+    }
+    push('ในบทบาทของคุณ ฉันช่วยได้ในเรื่อง: '+can+' ลองพิมพ์สิ่งที่ต้องการได้เลยค่ะ');
+    function roleLabelOf(r){ return {admin:'ผู้ดูแลระบบสถานศึกษา',scheduler:'ผู้จัดตาราง',teacher:'ครูผู้สอน'}[r]; }
+  }
+  send = (text) => {
+    if (!text || !text.trim()) return;
+    this.setState(s=>({msgs:[...s.msgs,{me:1,text}], input:''}));
+    setTimeout(()=>this.reply(text), 450);
+  };
+
+  renderVals() {
+    const st = this.state, S = this.S;
+    const canS = this.canSchedule();
+    const roleLabel = {admin:'ผู้ดูแลระบบสถานศึกษา', scheduler:'ผู้จัดตาราง (งานวิชาการ)', teacher:'ครูผู้สอน'}[st.role];
+    const userName = {admin:'นายวิชัย ศรีประเสริฐ', scheduler:'ครูปรียา สายสุวรรณ', teacher:'ครูณัฐวุฒิ พรหมมา'}[st.role];
+    const schools = ['วิทยาลัยเทคนิคเมืองใหม่','วิทยาลัยอาชีวศึกษาริมน้ำ','วิทยาลัยการอาชีพบ้านสวน'].map((name,i)=>({v:String(i),name}));
+    const nav = (key,label,icon) => ({key,label,icon,go:()=>this.go(key),bg:st.page===key?'#D63384':'transparent',fg:st.page===key?'#FFFFFF':'#C9BECE'});
+    const titles = {dashboard:'แดชบอร์ด',schedule:'จัดตารางเรียน',policies:'นโยบายการจัดตาราง',skills:'วิเคราะห์ทักษะครูและแบ่งรายวิชา',data:'ข้อมูลพื้นฐาน',ai:'ตั้งค่าผู้ช่วย AI'};
+
+    const E = st.entries;
+    const needHrs = this.ORDER.reduce((a,k)=>a+this.need(k),0);
+    const placedHrs = this.ORDER.reduce((a,k)=>a+Math.min(this.need(k),this.used(E,k)),0);
+
+    const cells = [];
+    for (let d=0; d<5; d++) for (let p=1; p<=10; p++) {
+      const b = this.blocked(d,p), picked = st.pick && st.pick.d===d && st.pick.p===p;
+      cells.push({col:String(p+1), row:String(d+2), bd: picked?'#D63384':'#E9E1EB',
+        bg: b ? 'repeating-linear-gradient(135deg,#EDE6EF 0 5px,#fff 5px 10px)' : picked ? '#FDF2F8' : '#FFFFFF',
+        cursor: b||!canS ? 'default' : 'pointer',
+        onClick: () => { if (b || !canS || this.occ(E,d,p)) return; this.setState({pick:{d,p}, sel:null}); }});
+    }
+    const breaks = [0,1,2,3,4].map(d=>({col:'5 / span 1',row:String(d+2),bg:'transparent',bd:'transparent',fg:'#9A8FA0',shadow:'none',icon:'bi-cup-hot',code:'11:00–12:00',name:'พักกลางวัน',meta:'นโยบายข้อ 2',onClick:()=>{}}));
+    const blocks = breaks.concat(E.map((e,i)=>{
+      const s = S[e.k], sel = st.sel===i;
+      const warn = !!e.w;
+      return {col:(e.s+1)+' / span '+e.l, row:String(e.d+2),
+        bg: e.m ? '#FFFFFF' : warn ? '#FFF1D6' : '#FCE7F1',
+        bd: e.m ? '#D63384' : warn ? '#E0A526' : (sel?'#D63384':'#FCE7F1'),
+        fg: e.m ? '#1D1620' : warn ? '#6B4A0E' : '#8E1F57',
+        shadow: sel ? '0 0 0 3px rgba(214,51,132,.25)' : 'none',
+        icon: e.m ? 'bi-lock-fill' : warn ? 'bi-exclamation-triangle-fill' : 'bi-stars',
+        code: s.code, name: s.name, meta: s.room+' · '+s.teacher.replace('ครู',''),
+        onClick: () => this.setState({sel:i, pick:null})};
+    }));
+    const pickOptions = this.ORDER.map(k=>({k,left:this.need(k)-this.used(E,k)})).filter(o=>o.left>0).map(o=>({name:S[o.k].name,left:o.left,add:()=>this.addManual(o.k)}));
+    const selE = st.sel!=null ? E[st.sel] : null;
+    const sel = selE ? (()=>{ const s=S[selE.k]; return {code:s.code,name:s.name,tpn:s.t+'-'+s.p+'-'+s.n,time:'วัน'+this.DAYS[selE.d]+' '+this.TIMES[selE.s-1]+'–'+this.TIMES[selE.s-1+selE.l],teacher:s.teacher,room:s.room,
+      kind: selE.m ? (selE.moved?'ลงด้วยมือ (ย้ายตามข้อแนะนำ AI)':'ลงด้วยมือ · ล็อกไว้') : 'AI จัดให้', warn: selE.w||'', lockIcon: selE.m?'bi-unlock':'bi-lock', lockLabel: selE.m?'ปลดล็อก':'ล็อกไว้'}; })() : {};
+
+    const hourCheck = this.ORDER.map(k=>{ const s=S[k], n=this.need(k), g=this.used(E,k);
+      return {name:s.name,tpn:s.t+'-'+s.p+'-'+s.n,need:n,got:g,bg:g>=n?'#E8F5EE':g>0?'#FFF6E0':'#F3EEF4',fg:g>=n?'#157347':g>0?'#8A5A0B':'#6E6473'}; });
+    const unplaced = this.ORDER.filter(k=>this.used(E,k)<this.need(k)).map(k=>({name:S[k].name,left:this.need(k)-this.used(E,k),
+      reason: k==='sci' ? 'ครูอรทัยและห้องปฏิบัติการ SCI-201 (วิทยาเขต 2) ว่างตรงกันเฉพาะวันจันทร์ คาบ 1–3 แต่คาบ 1–2 มีรายการที่ลงด้วยมือไว้ และช่วงเย็นวันศุกร์เกิน 17 น. ตามนโยบายข้อ 4' : 'ไม่พบช่วงเวลาที่ครู ห้อง และกลุ่มผู้เรียนว่างตรงกันโดยไม่ขัดข้อบังคับ'}));
+    const sciLeft = unplaced.some(u=>u.name===S.sci.name);
+    const suggestions = [
+      {tag:'แนะนำ',tagBg:'#E8F5EE',tagFg:'#157347',effect:'ลงครบ 26/26 · ไม่ขัดนโยบาย',text:'ย้าย “การเขียนโปรแกรมเบื้องต้น” ที่ลงด้วยมือ จากวันจันทร์ คาบ 1–2 ไปวันอังคาร คาบ 5–6 แล้วลงวิทยาศาสตร์วันจันทร์ คาบ 1–3',apply:()=>this.apply('A')},
+      {tag:'ผ่อนปรนนโยบาย',tagBg:'#FFF6E0',tagFg:'#8A5A0B',effect:'ลงครบ 26/26 · เลิกเรียน 18:00 น. 1 วัน',text:'เปลี่ยนนโยบายข้อ 4 “ปวช. เลิกเรียนไม่เกิน 17 น.” จากข้อบังคับเป็นข้อแนะนำ แล้วลงวิทยาศาสตร์วันศุกร์ คาบ 8–10',apply:()=>this.apply('B')}
+    ];
+
+    const morningGap = [0,1,2,3,4].some(d=>[1,2,3].some(p=>!this.occ(E,d,p)));
+    const lateEnd = E.some(e=>e.s+e.l-1>=10);
+    const segOk = this.ORDER.every(k=>E.filter(e=>e.k===k).length<=3);
+    const compliance = st.policies.filter(p=>p.on).map((p,i)=>{
+      let ok=true, status='ปฏิบัติตามครบ';
+      if (p.id===1 && morningGap){ ok=false; status='มีคาบว่างช่วงเช้า'; }
+      if (p.id===3) status='ไม่เกี่ยวข้องกับกลุ่มนี้ (ระดับ ปวช.)';
+      if (p.id===4 && lateEnd){ ok=false; status='วันศุกร์เลิก 18:00 น. (ผ่อนปรนเป็นข้อแนะนำ)'; }
+      if (p.id===5) status='วิชา 4 ชม. แบ่ง 2+2 · วิชา 5 ชม. แบ่ง 3+2';
+      if (p.id===6 && !segOk){ ok=false; status='มีวิชาแบ่งเกิน 3 ส่วน'; }
+      if (p.id===7) status = st.applied==='A' ? 'จันทร์ย้ายวิทยาเขตช่วงพักกลางวัน ใช้เวลา ~8 นาที' : 'ไม่มีคาบติดกันที่ต้องย้ายวิทยาเขต';
+      if (p.id>7) status='ตรวจแล้ว';
+      return {no:i+1,short:p.short,status,icon:ok?'bi-check-circle-fill':'bi-exclamation-triangle-fill',color:ok?'#198754':'#C28A17'};
+    });
+
+    const runTexts = ['อ่านข้อมูลครู ห้อง และรายวิชา 9 วิชา','คงรายการที่ลงด้วยมือ '+E.filter(e=>e.m).length+' รายการ','ลงตามข้อบังคับ '+st.policies.filter(p=>p.on&&p.type==='required').length+' ข้อ','ปรับตามข้อแนะนำเรียงลำดับความสำคัญ','ตรวจระยะเดินทางและขนาดห้อง'];
+    const runSteps = runTexts.map((text,i)=>({text,icon:i<st.runStep?'bi-check-circle-fill':i===st.runStep?'bi-arrow-repeat':'bi-circle',color:i<=st.runStep?'#F4EEF6':'#7D6E84'}));
+
+    const polRO = st.role!=='admin';
+    const policyRows = st.policies.map((p,i)=>{
+      const upd = (patch)=>{ if(polRO) return; this.setState(s=>({policies:s.policies.map(x=>x.id===p.id?{...x,...patch}:x)})); };
+      const move = (dir)=>{ if(polRO) return; this.setState(s=>{ const a=[...s.policies], j=i+dir; if(j<0||j>=a.length) return null; [a[i],a[j]]=[a[j],a[i]]; return {policies:a}; }); };
+      const req = p.type==='required';
+      return {no:i+1,text:p.text,opacity:p.on?'1':'.5',
+        reqBg:req?'#D63384':'transparent',reqFg:req?'#fff':'#6E6473',recBg:!req?'#fff':'transparent',recFg:!req?'#1D1620':'#6E6473',
+        swBg:p.on?'#D63384':'#D9CFDC',swX:p.on?'19px':'3px',
+        setReq:()=>upd({type:'required'}),setRec:()=>upd({type:'recommended'}),toggle:()=>upd({on:!p.on}),
+        up:()=>move(-1),down:()=>move(1),remove:()=>{ if(!polRO) this.setState(s=>({policies:s.policies.filter(x=>x.id!==p.id)})); }};
+    });
+
+    const skillMap = {thai:['ครูสุนิสา แก้วมณี',96,'ป.โท ภาษาไทย · สอนวิชานี้ 6 ภาคเรียน','ครูวรรณา (82%)'],eng:['ครูพิมพ์ชนก ศรีสุข',94,'ป.ตรี ภาษาอังกฤษ · TOEIC 850','ครูวรรณา (71%)'],math:['ครูวีระพงษ์ ทองดี',92,'ป.ตรี คณิตศาสตร์ · สอนสายอาชีพ 8 ปี','ครูธนากร (64%)'],sci:['ครูอรทัย บุญมา',90,'ป.ตรี วิทยาศาสตร์ทั่วไป · ประจำ Lab วข.2','ครูวีระพงษ์ (58%)'],comp:['ครูธนากร ใจงาม',93,'ป.ตรี คอมพิวเตอร์ศึกษา · Office, Network','ครูกมลชนก (80%)'],prog:['ครูณัฐวุฒิ พรหมมา',97,'Python, C · โค้ชแข่งทักษะ','ครูธนากร (78%)'],os:['ครูณัฐวุฒิ พรหมมา',88,'Linux, Windows Server','ครูธนากร (84%)'],gfx:['ครูกมลชนก วงศ์ใหญ่',95,'Photoshop, Illustrator · ผลงานสื่อ','ครูธนากร (61%)'],scout:['ครูสมชาย รักชาติ',91,'ผู้กำกับลูกเสือวิสามัญ','ครูวีระพงษ์ (70%)']};
+    const skillRows = this.ORDER.map(k=>{ const s=S[k], m=skillMap[k]; return {code:s.code,name:s.name,tpn:s.t+'-'+s.p+'-'+s.n,teacher:m[0],score:m[1],reason:m[2],alt:m[3]}; });
+    const loads = [['ครูณัฐวุฒิ พรหมมา',16,18],['ครูธนากร ใจงาม',14,20],['ครูกมลชนก วงศ์ใหญ่',15,20],['ครูอรทัย บุญมา',12,18],['ครูวีระพงษ์ ทองดี',17,18],['ครูพิมพ์ชนก ศรีสุข',13,20],['ครูสุนิสา แก้วมณี',11,20],['ครูสมชาย รักชาติ',8,16]];
+    const teacherLoad = loads.map(([name,h,max])=>{ const hrs=st.skillsRun?h:0, r=hrs/max; return {name,hrs,max,pct:Math.round(r*100),bar:r>0.85?'#E0A526':'#D63384',fg:r>0.85?'#8A5A0B':'#6E6473'}; });
+
+    const tab = (key,label,icon)=>({label,icon,go:()=>this.setState({dataTab:key}),bg:st.dataTab===key?'#FCE7F1':'#fff',fg:st.dataTab===key?'#AB296A':'#4A4050',bd:st.dataTab===key?'#F1B5D2':'#E9E1EB'});
+    const teachers = [
+      {name:'ครูณัฐวุฒิ พรหมมา',dept:'เทคโนโลยีสารสนเทศ',degree:'ป.โท วิทยาการคอมพิวเตอร์',skills:['Python','C','Linux','การแข่งขันทักษะ'],max:18},
+      {name:'ครูธนากร ใจงาม',dept:'เทคโนโลยีสารสนเทศ',degree:'ป.ตรี คอมพิวเตอร์ศึกษา',skills:['Office','Network','Windows Server'],max:20},
+      {name:'ครูกมลชนก วงศ์ใหญ่',dept:'เทคโนโลยีสารสนเทศ',degree:'ป.ตรี ศิลปกรรม',skills:['Photoshop','Illustrator','วิดีโอ'],max:20},
+      {name:'ครูอรทัย บุญมา',dept:'สามัญสัมพันธ์',degree:'ป.ตรี วิทยาศาสตร์ทั่วไป',skills:['ฟิสิกส์','เคมี','ห้องปฏิบัติการ'],max:18},
+      {name:'ครูวีระพงษ์ ทองดี',dept:'สามัญสัมพันธ์',degree:'ป.ตรี คณิตศาสตร์',skills:['คณิตศาสตร์','สถิติ'],max:18},
+      {name:'ครูพิมพ์ชนก ศรีสุข',dept:'สามัญสัมพันธ์',degree:'ป.ตรี ภาษาอังกฤษ',skills:['ภาษาอังกฤษ','TOEIC 850'],max:20},
+      {name:'ครูสุนิสา แก้วมณี',dept:'สามัญสัมพันธ์',degree:'ป.โท ภาษาไทย',skills:['ภาษาไทย','การเขียน'],max:20},
+      {name:'ครูสมชาย รักชาติ',dept:'กิจการนักเรียน',degree:'ป.ตรี พลศึกษา',skills:['ลูกเสือวิสามัญ','พลศึกษา'],max:16}
+    ];
+    const groups = [
+      {name:'ปวช.1/1 เทคโนโลยีสารสนเทศ',level:'ปวช.',n:32,advisor:'ครูธนากร ใจงาม',note:'ห้อง 1-204 (30 ที่) เล็กกว่าจำนวนผู้เรียน',noteFg:'#B02A37'},
+      {name:'ปวช.1/2 เทคโนโลยีสารสนเทศ',level:'ปวช.',n:35,advisor:'ครูกมลชนก วงศ์ใหญ่',note:'ห้องที่ใช้รองรับได้ทั้งหมด',noteFg:'#157347'},
+      {name:'ปวช.2/1 เทคโนโลยีสารสนเทศ',level:'ปวช.',n:29,advisor:'ครูณัฐวุฒิ พรหมมา',note:'ห้องที่ใช้รองรับได้ทั้งหมด',noteFg:'#157347'},
+      {name:'ปวส.1/1 เทคโนโลยีสารสนเทศ',level:'ปวส.',n:28,advisor:'ครูธนากร ใจงาม',note:'ห้อง 5-302 เหลือที่ว่าง 12 ที่',noteFg:'#6E6473'},
+      {name:'ทล.บ.1/1 เทคโนโลยีสารสนเทศ',level:'ป.ตรี',n:18,advisor:'ครูณัฐวุฒิ พรหมมา',note:'แนะนำห้องขนาดเล็กเพื่อประหยัดพลังงาน',noteFg:'#6E6473'}
+    ];
+    const plans = [
+      {term:'ภาคเรียนที่ 2/2569',name:'ปวช. เทคโนโลยีสารสนเทศ ชั้นปีที่ 1',subjects:9,hrs:26,credits:15,groups:'ปวช.1/1, ปวช.1/2'},
+      {term:'ภาคเรียนที่ 2/2569',name:'ปวช. เทคโนโลยีสารสนเทศ ชั้นปีที่ 2',subjects:10,hrs:28,credits:17,groups:'ปวช.2/1'},
+      {term:'ภาคเรียนที่ 2/2569',name:'ปวส. เทคโนโลยีสารสนเทศ ชั้นปีที่ 1',subjects:8,hrs:24,credits:18,groups:'ปวส.1/1'},
+      {term:'ภาคเรียนที่ 2/2569',name:'ทล.บ. เทคโนโลยีสารสนเทศ ชั้นปีที่ 1',subjects:7,hrs:21,credits:19,groups:'ทล.บ.1/1'}
+    ];
+    const subjectRows = this.ORDER.map(k=>{ const s=S[k]; return {code:s.code,name:s.name,t:s.t,p:s.p,n:s.n,hrs:s.t+s.p}; });
+    const buildings = [
+      {name:'อาคาร 1 อำนวยการและสามัญ',short:'อาคาร 1',campus:'วิทยาเขตหลัก',lat:'13.7563',lng:'100.5018',dist:'—',x:22,y:34,dot:'#D63384',bg:'#F3EEF4',fg:'#6E6473'},
+      {name:'อาคาร 3 ช่างอุตสาหกรรม',short:'อาคาร 3',campus:'วิทยาเขตหลัก',lat:'13.7568',lng:'100.5026',dist:'2 นาที',x:34,y:22,dot:'#D63384',bg:'#E8F5EE',fg:'#157347'},
+      {name:'อาคาร 5 เทคโนโลยีสารสนเทศ',short:'อาคาร 5',campus:'วิทยาเขตหลัก',lat:'13.7559',lng:'100.5031',dist:'3 นาที',x:36,y:48,dot:'#D63384',bg:'#E8F5EE',fg:'#157347'},
+      {name:'ลานกิจกรรม',short:'ลานกิจกรรม',campus:'วิทยาเขตหลัก',lat:'13.7555',lng:'100.5012',dist:'2 นาที',x:18,y:62,dot:'#D63384',bg:'#E8F5EE',fg:'#157347'},
+      {name:'อาคารวิทยาศาสตร์ SCI',short:'SCI วข.2',campus:'วิทยาเขต 2',lat:'13.7641',lng:'100.5155',dist:'1.8 กม. · ~8 นาที',x:82,y:70,dot:'#7B4FB0',bg:'#FFF6E0',fg:'#8A5A0B'}
+    ];
+    const rooms = [{code:'1-204',type:'ห้องเรียนทฤษฎี',cap:30},{code:'1-205',type:'ห้องเรียนทฤษฎี',cap:40},{code:'1-301',type:'ห้องเรียนทฤษฎี',cap:40},{code:'5-301',type:'ห้องปฏิบัติการคอมพิวเตอร์',cap:36},{code:'5-302',type:'ห้องปฏิบัติการคอมพิวเตอร์',cap:40},{code:'SCI-201',type:'ห้องปฏิบัติการวิทยาศาสตร์ (วข.2)',cap:36}];
+
+    const PROV = {
+      openrouter:{name:'OpenRouter',icon:'bi-shuffle',desc:'เลือกใช้ได้หลายโมเดลผ่าน API เดียว',url:'https://openrouter.ai/api/v1',models:['anthropic/claude-sonnet-4.5','google/gemini-2.5-pro','openai/gpt-4.1']},
+      google:{name:'Google AI Studio',icon:'bi-google',desc:'ใช้โมเดล Gemini ด้วย API Key จาก AI Studio',url:'https://generativelanguage.googleapis.com/v1beta',models:['gemini-2.5-pro','gemini-2.5-flash']},
+      custom:{name:'Server LLM ของสถานศึกษา',icon:'bi-hdd-rack',desc:'เซิร์ฟเวอร์ที่รองรับ OpenAI-compatible API เช่น Ollama, vLLM',url:'http://llm.college.local:11434/v1',models:['llama3.1:70b','qwen2.5:32b','typhoon2-8b']}
+    };
+    const prov = PROV[st.provider];
+    const aiRO = st.role!=='admin';
+    const perm = (key,label,sub)=>({label,sub,swBg:st.perms[key]?'#D63384':'#D9CFDC',swX:st.perms[key]?'19px':'3px',toggle:()=>{ if(!aiRO) this.setState(s=>({perms:{...s.perms,[key]:!s.perms[key]}})); }});
+
+    const quick = st.role==='teacher' ? ['สรุปตารางสอนของฉัน','ขอจัดตารางใหม่','ตรวจขนาดห้อง'] : st.role==='admin' ? ['จัดตารางอัตโนมัติ','เพิ่มนโยบาย ครูสอนไม่เกิน 6 ชม./วัน','วิเคราะห์ทักษะครู'] : ['จัดตารางอัตโนมัติ','วิเคราะห์ทักษะครู','แก้นโยบายข้อ 4'];
+
+    return {
+      isLanding: st.view==='landing', isApp: st.view==='app',
+      enterApp: ()=>this.setState({view:'app',page:'dashboard'}), enterSchedule: ()=>this.setState({view:'app',page:'schedule'}), goLanding: ()=>this.setState({view:'landing'}),
+      features: [
+        {icon:'bi-database-add',title:'นำเข้าข้อมูลครบชุด',text:'ครูผู้สอน กลุ่มผู้เรียน ข้อมูลผู้เรียน แผนการเรียน รายวิชา ท-ป-น อาคารและห้องเรียน จากไฟล์ Excel หรือ CSV'},
+        {icon:'bi-diagram-3',title:'วิเคราะห์ทักษะครู',text:'AI เทียบทักษะ วุฒิ และประสบการณ์ของครูกับรายวิชา เพื่อแบ่งรายวิชาก่อนจัดตาราง'},
+        {icon:'bi-sliders',title:'นโยบายเรียงตามความสำคัญ',text:'ผู้ดูแลระบบเพิ่ม ลด เรียงลำดับ และกำหนดว่าแต่ละข้อเป็นข้อบังคับหรือข้อแนะนำ'},
+        {icon:'bi-calendar3-week',title:'ลงด้วยมือ แล้วให้ AI จัดต่อ',text:'ล็อกคาบที่กำหนดเองไว้ก่อน แล้วให้ AI เติมส่วนที่เหลือโดยอัตโนมัติตามนโยบาย'},
+        {icon:'bi-clipboard-check',title:'ตรวจชั่วโมงตาม ท-ป-น',text:'ตรวจว่าแต่ละรายวิชาลงครบชั่วโมงทฤษฎีและปฏิบัติหรือยัง'},
+        {icon:'bi-lightbulb',title:'บอกส่วนที่จัดไม่ได้พร้อมทางแก้',text:'แจ้งสาเหตุ และเสนอการผ่อนปรนนโยบายหรือการเลื่อนคาบที่ลงด้วยมือเพื่อให้จัดเสร็จ'},
+        {icon:'bi-geo-alt',title:'พิกัดอาคารและหลายวิทยาเขต',text:'เตือนเมื่อคาบติดกันต้องเดินทางไกล และตรวจขนาดห้องกับจำนวนผู้เรียน'},
+        {icon:'bi-buildings',title:'หลายสถานศึกษาในระบบเดียว',text:'แต่ละสถานศึกษามีข้อมูล นโยบาย และการตั้งค่า AI แยกกัน'}
+      ],
+      steps: [
+        {no:'01',title:'นำเข้าข้อมูล',text:'ครู กลุ่มผู้เรียน แผนการเรียน รายวิชา อาคาร และห้องเรียน'},
+        {no:'02',title:'แบ่งรายวิชา',text:'AI วิเคราะห์ทักษะครูและเสนอผู้สอนแต่ละวิชา'},
+        {no:'03',title:'กำหนดนโยบาย',text:'เรียงลำดับความสำคัญ เลือกข้อบังคับหรือข้อแนะนำ'},
+        {no:'04',title:'ลงคาบที่กำหนดเอง',text:'ล็อกคาบกิจกรรมหรือคาบที่ต้องการก่อน'},
+        {no:'05',title:'AI จัดตารางและแนะนำ',text:'จัดส่วนที่เหลือ พร้อมทางแก้สำหรับส่วนที่จัดไม่ได้'}
+      ],
+      providers: Object.values(PROV).map(p=>({icon:p.icon,name:p.name,desc:p.desc})),
+
+      navMain: [nav('dashboard','แดชบอร์ด','bi-grid-1x2'),nav('schedule','จัดตารางเรียน','bi-calendar3-week'),nav('policies','นโยบายการจัดตาราง','bi-sliders'),nav('skills','วิเคราะห์ทักษะครู','bi-diagram-3')],
+      navSys: [nav('data','ข้อมูลพื้นฐาน','bi-database'),nav('ai','ตั้งค่าผู้ช่วย AI','bi-cpu')],
+      schools, school: st.school, schoolName: schools[+st.school].name, setSchool: e=>this.setState({school:e.target.value}),
+      role: st.role, setRole: e=>this.setState({role:e.target.value, pick:null, sel:null}), roleLabel, userName, userInitial: userName.replace(/^(ครู|นาย)/,'').charAt(0),
+      pageTitle: titles[st.page], providerName: prov.name,
+      isDashboard: st.page==='dashboard', isSchedule: st.page==='schedule', isPolicies: st.page==='policies', isSkills: st.page==='skills', isData: st.page==='data', isAI: st.page==='ai',
+      goSchedule: e=>{ e && e.preventDefault && e.preventDefault(); this.go('schedule'); },
+
+      stats: [{icon:'bi-person-badge',value:'86',label:'ครูผู้สอน'},{icon:'bi-people',value:'42',label:'กลุ่มผู้เรียน'},{icon:'bi-journal-text',value:'214',label:'รายวิชาในภาคเรียน'},{icon:'bi-door-open',value:'68',label:'ห้องเรียน · 2 วิทยาเขต'}],
+      groupProgress: [{name:'ปวช.1/1 เทคโนโลยีสารสนเทศ',pct:Math.round(placedHrs/needHrs*100)},{name:'ปวช.1/2 เทคโนโลยีสารสนเทศ',pct:100},{name:'ปวช.2/1 เทคโนโลยีสารสนเทศ',pct:82},{name:'ปวส.1/1 เทคโนโลยีสารสนเทศ',pct:64},{name:'ทล.บ.1/1 เทคโนโลยีสารสนเทศ',pct:0}],
+      alerts: [
+        {icon:'bi-people-fill',color:'#B02A37',title:'ห้องเรียนเล็กกว่าจำนวนผู้เรียน',text:'ปวช.1/1 มี 32 คน แต่ห้อง 1-204 จุ 30 ที่นั่ง แนะนำห้อง 1-301 (40 ที่นั่ง)'},
+        {icon:'bi-geo-alt-fill',color:'#C28A17',title:'ระยะเดินทางระหว่างคาบ',text:'ครูอรทัยสอนที่วิทยาเขต 2 คาบ 3 แล้วต่อที่อาคาร 1 คาบ 4 (ปวส.1/1) ระยะ 1.8 กม. ใช้เวลาประมาณ 8 นาที'},
+        {icon:'bi-hourglass-split',color:'#6E6473',title:'ยังไม่ได้แบ่งรายวิชา',text:'ทล.บ.1/1 ยังไม่มีครูผู้สอน 2 รายวิชา ให้ AI วิเคราะห์ทักษะครูก่อนจัดตาราง'}
+      ],
+
+      periodHeads: this.TIMES.slice(0,10).map((t,i)=>({col:String(i+2),no:i+1,time:t})),
+      dayHeads: this.DAYS.map((name,i)=>({name,row:String(i+2)})),
+      cells, blocks, placedHrs, needHrs, hourCheck,
+      cannotSchedule: !canS, runOpacity: canS?'1':'.45', teacherNote: !canS,
+      runAI: ()=>this.runAI(), resetSchedule: ()=>{ if(canS) this.setState({entries:this.INIT.map(e=>({...e})),phase:'manual',applied:null,pick:null,sel:null,policies:this.state.policies.map(p=>p.id===4?{...p,type:'required'}:p)}); },
+      isRunning: st.phase==='running', runPct: Math.min(100,st.runStep*20), runSteps,
+      showReport: st.phase==='partial', unplaced, unplacedCount: unplaced.length, showSuggestions: sciLeft && !st.applied, suggestions,
+      showDone: st.phase==='done' && placedHrs>=needHrs,
+      doneNote: st.applied==='B' ? 'ผ่อนปรนนโยบายข้อ 4 เป็นข้อแนะนำ วิทยาศาสตร์ลงวันศุกร์ 15:00–18:00 น.' : 'ปฏิบัติตามข้อบังคับครบทุกข้อ ย้ายรายการที่ลงด้วยมือ 1 รายการตามข้อแนะนำ',
+      showCompliance: st.phase==='partial' || st.phase==='done', compliance,
+      hasPick: !!st.pick, pickLabel: st.pick ? 'วัน'+this.DAYS[st.pick.d]+' คาบ '+st.pick.p : '', pickOptions, pickEmpty: st.pick && pickOptions.length===0, clearPick: ()=>this.setState({pick:null}),
+      hasSel: !!selE, sel, clearSel: ()=>this.setState({sel:null}),
+      toggleLock: ()=>{ if(!canS||!selE) return; this.setState(s=>({entries:s.entries.map((e,i)=>i===s.sel?{...e,m:e.m?0:1}:e)})); },
+      removeSel: ()=>{ if(!canS||!selE) return; this.setState(s=>({entries:s.entries.filter((e,i)=>i!==s.sel),sel:null})); },
+
+      policyRows, policyReadonly: polRO, newPolicy: st.newPolicy, newPolicyType: st.newPolicyType,
+      setNewPolicy: e=>this.setState({newPolicy:e.target.value}), setNewPolicyType: e=>this.setState({newPolicyType:e.target.value}),
+      addPolicy: ()=>{ const t=st.newPolicy.trim(); if(!t||polRO) return; this.setState(s=>({newPolicy:'',policies:[...s.policies,{id:Date.now(),short:t,text:t,type:s.newPolicyType,on:true}]})); },
+
+      skillsRun: st.skillsRun, skillsIdle: !st.skillsRun, skillsBtn: st.skillsRun?'วิเคราะห์ใหม่':'ให้ AI วิเคราะห์ทักษะครู',
+      runSkills: ()=>{ if(canS){ this.setState({skillsRun:false}); setTimeout(()=>this.setState({skillsRun:true}),350); } }, skillRows, teacherLoad,
+
+      dataTabs: [tab('teachers','ครูผู้สอน','bi-person-badge'),tab('groups','กลุ่มผู้เรียน','bi-people'),tab('plans','แผนการเรียน','bi-journal-bookmark'),tab('subjects','รายวิชา','bi-journal-text'),tab('rooms','อาคารและห้องเรียน','bi-building')],
+      tabTeachers: st.dataTab==='teachers', tabGroups: st.dataTab==='groups', tabPlans: st.dataTab==='plans', tabSubjects: st.dataTab==='subjects', tabRooms: st.dataTab==='rooms',
+      teachers, groups, plans, subjectRows, buildings, rooms,
+
+      providerCards: Object.entries(PROV).map(([k,p])=>({name:p.name,icon:p.icon,desc:p.desc,bd:st.provider===k?'#D63384':'#EEE7EF',check:st.provider===k?'bi-check-circle-fill':'bi-circle',pick:()=>{ if(!aiRO) this.setState({provider:k,test:'idle'}); }})),
+      providerUrl: prov.url, providerModels: prov.models, aiReadonly: aiRO,
+      testConn: ()=>{ this.setState({test:'testing'}); setTimeout(()=>this.setState({test:'ok'}),900); },
+      testText: st.test==='testing'?'กำลังทดสอบ…':st.test==='ok'?'เชื่อมต่อสำเร็จ · ตอบกลับใน 820 ms':'',
+      testFg: st.test==='ok'?'#157347':'#6E6473',
+      aiPerms: [perm('act','ให้ AI ดำเนินการแทนผู้ใช้','ทำได้เฉพาะงานที่อยู่ในสิทธิ์ของบทบาทผู้ใช้'),perm('confirm','ยืนยันก่อนบันทึกการเปลี่ยนแปลง','AI แสดงสิ่งที่จะเปลี่ยนและรอผู้ใช้กดยืนยัน'),perm('suggest','แนะนำผู้รับผิดชอบเมื่องานเกินสิทธิ์','ระบุบทบาทและชื่อผู้ที่ต้องติดต่อ'),perm('log','บันทึกประวัติการทำงานของ AI','ตรวจสอบย้อนหลังได้ว่า AI ทำอะไรแทนใคร')],
+
+      chatOpen: st.chatOpen, openChat: ()=>this.setState({chatOpen:true}), closeChat: ()=>this.setState({chatOpen:false}),
+      msgs: st.msgs, input: st.input, setInput: e=>this.setState({input:e.target.value}),
+      inputKey: e=>{ if(e.key==='Enter' && !e.shiftKey && !e.nativeEvent.isComposing){ e.preventDefault(); if(this._rec && st.listening) this._rec.stop(); this.send(this.state.input); } },
+      sendInput: ()=>{ if(this._rec && st.listening) this._rec.stop(); this.send(st.input); },
+      taRef: this.taRef, listening: !!st.listening, notListening: !st.listening, interim: st.interim||'', hasInterim: !!st.interim,
+      charCount: (st.input||'').length ? (st.input.length+' ตัวอักษร') : '',
+      inputBd: st.listening ? '#DC3545' : '#E2D8E4',
+      micBg: st.listening ? '#DC3545' : '#FCE7F1', micFg: st.listening ? '#fff' : '#AB296A', micIcon: st.listening ? 'bi-stop-fill' : 'bi-mic-fill', micAnim: st.listening ? 'micPulse 1.4s infinite' : 'none',
+      toggleMic: this.toggleMic,
+      showFab: st.view==='app' && !st.chatOpen, fab: this.buildFab(),
+      quickPrompts: quick.map(text=>({text,send:()=>this.send(text)}))
+    };
+  }
+}
+</script>
+</body>
+</html>
