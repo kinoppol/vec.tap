@@ -20,6 +20,15 @@
     </div>
     <form data-chat-form action="<?= e(url('/chat')) ?>" method="post">
         <?= Csrf::field() ?>
+        <?php if (count($shell['aiModels']) > 1): ?>
+            <label class="chat-model">โมเดลที่ทำงาน
+                <select name="model_id">
+                    <?php foreach ($shell['aiModels'] as $model): ?>
+                        <option value="<?= (int) $model['id'] ?>" <?= (int) $model['id'] === (int) $shell['aiModelId'] ? 'selected' : '' ?>><?= e($model['model_name']) ?> · <?= e($model['label']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+        <?php endif; ?>
         <textarea name="message" rows="1" placeholder="พิมพ์หรือกดไมค์เพื่อพูด อธิบายยาว ๆ ได้" data-chat-input></textarea>
         <div class="chat-tools">
             <span data-chat-status>0 ตัวอักษร</span>

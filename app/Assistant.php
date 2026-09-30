@@ -15,9 +15,10 @@ final class Assistant
             self::maybeLog($schoolId, (int) $user['id'], $settings, 'chat', $text);
             return $local;
         }
-        if (self::ready($settings)) {
+        $model = Repo::resolveModel($schoolId, (int) ($_SESSION['ai_model_id'][$schoolId] ?? 0));
+        if (self::ready($model)) {
             try {
-                $key = Crypto::decrypt((string) $settings['api_key_encrypted']);
+                $key = Crypto::decrypt((string) $model['api_key_encrypted']);
                 $history = [];
                 foreach ($_SESSION['chat'][$schoolId] ?? [] as $message) {
                     $history[] = [
@@ -26,7 +27,11 @@ final class Assistant
                     ];
                 }
                 $history[] = ['role' => 'user', 'content' => $text];
-                $answer = AiClient::chat($settings, $key, self::systemPrompt($user, $schoolId, $settings), array_slice($history, -12));
+                $answer = AiClient::chat([
+                    'provider' => $model['provider'],
+                    'base_url' => $model['base_url'],
+                    'model' => $model['model_name'],
+                ], $key, self::systemPrompt($user, $schoolId, $settings), array_slice($history, -12));
                 self::maybeLog($schoolId, (int) $user['id'], $settings, 'chat-api', $text);
                 return trim($answer);
             } catch (Throwable $exception) {
@@ -231,9 +236,12 @@ final class Assistant
         return $name ? (string) $name . ' (' . role_label($role) . ')' : $fallback;
     }
 
-    private static function ready(array $settings): bool
+    private static function ready(?array $model): bool
     {
-        return ($settings['last_test_status'] ?? '') === 'ok' && !empty($settings['api_key_encrypted']);
+        return is_array($model)
+            && ($model['last_test_status'] ?? '') === 'ok'
+            && !empty($model['api_key_encrypted'])
+            && !empty($model['model_name']);
     }
 
     private static function maybeLog(int $schoolId, int $userId, array $settings, string $action, string $detail): void

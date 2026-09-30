@@ -16,6 +16,7 @@ require_once __DIR__ . '/Skills.php';
 require_once __DIR__ . '/AiClient.php';
 require_once __DIR__ . '/Assistant.php';
 require_once __DIR__ . '/Spreadsheet.php';
+require_once __DIR__ . '/Rms.php';
 require_once __DIR__ . '/Ui.php';
 
 boot_session();

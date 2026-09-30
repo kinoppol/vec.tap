@@ -8,9 +8,12 @@ function app_shell(string $currentPage): array
     $school = $schoolId > 0 ? SchoolContext::current() : null;
     $settings = $schoolId > 0 ? Repo::ai($schoolId) : null;
     $catalog = ai_catalog();
-    $providerKey = $settings['provider'] ?? 'openrouter';
+    $preferred = (int) ($_SESSION['ai_model_id'][$schoolId] ?? 0);
+    $working = $schoolId > 0 ? Repo::resolveModel($schoolId, $preferred) : null;
+    $providerKey = is_array($working) ? (string) $working['provider'] : 'openrouter';
     $provider = $catalog[$providerKey] ?? $catalog['openrouter'];
-    $connected = $settings && ($settings['last_test_status'] ?? '') === 'ok';
+    $connected = is_array($working) && ($working['last_test_status'] ?? '') === 'ok';
+    $aiModels = $schoolId > 0 ? Repo::enabledModels($schoolId) : [];
     $term = $schoolId > 0 ? Repo::term($schoolId) : null;
 
     $item = static function (string $key, string $label, string $icon) use ($currentPage): array {
@@ -31,8 +34,11 @@ function app_shell(string $currentPage): array
     ];
     $system = [
         $item('data', 'ข้อมูลพื้นฐาน', 'bi-database'),
-        $item('ai', 'ตั้งค่าผู้ช่วย AI', 'bi-cpu'),
     ];
+    if ($user && in_array($user['role'], ['superadmin', 'school_admin', 'scheduler'], true)) {
+        $system[] = $item('rms', 'นำเข้าจาก RMS', 'bi-cloud-download');
+    }
+    $system[] = $item('ai', 'ตั้งค่าผู้ช่วย AI', 'bi-cpu');
     if ($user && $user['role'] === 'superadmin') {
         $system[] = $item('schools', 'สถานศึกษา', 'bi-buildings');
         $system[] = $item('migrations', 'ปรับปรุงฐานข้อมูล', 'bi-arrow-repeat');
@@ -52,8 +58,10 @@ function app_shell(string $currentPage): array
         'schools' => $user && $user['role'] === 'superadmin' ? Repo::schools() : ($school ? [$school] : []),
         'canSwitch' => SchoolContext::canSwitch(),
         'termLabel' => $term['label'] ?? 'ยังไม่มีภาคเรียน',
-        'providerName' => $provider['name'],
+        'providerName' => is_array($working) ? (string) $working['label'] : $provider['name'],
         'aiConnected' => $connected,
+        'aiModels' => $aiModels,
+        'aiModelId' => (int) ($working['id'] ?? 0),
         'navMain' => $main,
         'navSys' => $system,
         'prompts' => $prompts,
@@ -68,6 +76,7 @@ function app_shell(string $currentPage): array
             'policies' => 'นโยบายการจัดตาราง',
             'skills' => 'วิเคราะห์ทักษะครูและแบ่งรายวิชา',
             'data' => 'ข้อมูลพื้นฐาน',
+            'rms' => 'นำเข้าจาก RMS',
             'ai' => 'ตั้งค่าผู้ช่วย AI',
             'schools' => 'สถานศึกษา',
             'migrations' => 'ปรับปรุงฐานข้อมูล',

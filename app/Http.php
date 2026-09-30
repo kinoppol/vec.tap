@@ -74,6 +74,14 @@ function dispatch(): void
         page_template();
         return;
     }
+    if ($path === '/rms' && $method === 'GET') {
+        page_rms();
+        return;
+    }
+    if ($path === '/rms' && $method === 'POST') {
+        page_rms_post();
+        return;
+    }
     if ($path === '/ai' && $method === 'GET') {
         page_ai();
         return;
@@ -482,6 +490,84 @@ function page_template(): void
     ], 'teachers.csv');
 }
 
+function page_rms(): void
+{
+    $user = Auth::requireRole(['superadmin', 'school_admin', 'scheduler']);
+    $schoolId = SchoolContext::id();
+    $resource = (string) ($_GET['view'] ?? 'students');
+    if (!in_array($resource, ['students', 'groups', 'holidays', 'schedules'], true)) {
+        $resource = 'students';
+    }
+    render('rms', [
+        'currentPage' => 'rms',
+        'baseUrl' => $schoolId > 0 ? Rms::baseUrl($schoolId) : '',
+        'canEditUrl' => in_array($user['role'], ['superadmin', 'school_admin'], true),
+        'terms' => $schoolId > 0 ? Rms::terms($schoolId) : [],
+        'counts' => $schoolId > 0 ? Rms::counts($schoolId) : [],
+        'browse' => $schoolId > 0 ? Rms::browse($schoolId, $resource, trim((string) ($_GET['q'] ?? '')), (int) ($_GET['page'] ?? 1)) : ['resource' => 'students', 'rows' => [], 'total' => 0, 'page' => 1, 'pages' => 1],
+        'query' => trim((string) ($_GET['q'] ?? '')),
+    ]);
+}
+
+function page_rms_post(): void
+{
+    $user = Auth::requireRole(['superadmin', 'school_admin', 'scheduler']);
+    $schoolId = SchoolContext::id();
+    if ($schoolId <= 0) {
+        rms_fail('ยังไม่มีสถานศึกษา');
+    }
+    $action = post_string('action');
+    try {
+        if ($action === 'save_url') {
+            if (!in_array($user['role'], ['superadmin', 'school_admin'], true)) {
+                throw new RuntimeException('เฉพาะผู้ดูแลสถานศึกษาตั้ง URL ของ RMS ได้');
+            }
+            Rms::saveBaseUrl($schoolId, post_string('base_url'));
+            flash('บันทึก URL ของ RMS สำหรับสถานศึกษานี้แล้ว');
+            redirect('/rms');
+        }
+        if ($action === 'current_term') {
+            Rms::setCurrentTerm($schoolId, (int) post_string('term_id'));
+            flash('ตั้งภาคเรียนปัจจุบันแล้ว การโหลดตารางเรียนจะใช้ภาคเรียนนี้');
+            redirect('/rms');
+        }
+        if ($action === 'count') {
+            rms_ok(['total' => Rms::countStudents($schoolId)]);
+        }
+        if ($action === 'sync' || $action === 'sync_batch') {
+            $dataset = post_string('dataset');
+            $offset = max(0, (int) post_string('offset'));
+            $row = (int) post_string('row');
+            if ($row < 1) {
+                $row = $dataset === 'schedules' ? 1000 : 100;
+            }
+            rms_ok(Rms::sync($schoolId, $dataset, $offset, $row));
+        }
+        throw new RuntimeException('คำสั่งไม่ถูกต้อง');
+    } catch (Throwable $exception) {
+        if ($action === 'save_url' || $action === 'current_term') {
+            flash($exception->getMessage(), 'err');
+            redirect('/rms');
+        }
+        rms_fail($exception->getMessage());
+    }
+}
+
+function rms_ok(array $data): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['ok' => true, 'data' => $data], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+function rms_fail(string $message): void
+{
+    http_response_code(422);
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['ok' => false, 'message' => $message], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 function page_data_post(): void
 {
     Auth::requireUser();
@@ -521,90 +607,156 @@ function page_ai(): void
         insert_default_ai(Database::pdo(), $schoolId);
         $settings = Repo::ai($schoolId);
     }
+    $preferred = (int) ($_SESSION['ai_model_id'][$schoolId] ?? 0);
     render('ai', [
         'currentPage' => 'ai',
         'settings' => $settings,
         'catalog' => ai_catalog(),
+        'credentials' => $schoolId > 0 ? Repo::credentialsWithModels($schoolId) : [],
+        'enabledModels' => $schoolId > 0 ? Repo::enabledModels($schoolId) : [],
+        'workingModelId' => $schoolId > 0 ? (int) (Repo::resolveModel($schoolId, $preferred)['id'] ?? 0) : 0,
         'canEdit' => in_array($user['role'], ['superadmin', 'school_admin'], true) && $schoolId > 0,
     ]);
 }
 
 function page_ai_post(): void
 {
-    $user = Auth::requireRole(['superadmin', 'school_admin']);
+    $user = Auth::requireUser();
     $schoolId = SchoolContext::id();
     if ($schoolId <= 0) {
         flash('ยังไม่มีสถานศึกษาให้ตั้งค่า', 'err');
         redirect('/ai');
     }
-    $current = Repo::ai($schoolId);
-    if ($current === null) {
-        insert_default_ai(Database::pdo(), $schoolId);
-        $current = Repo::ai($schoolId);
-    }
     $action = post_string('action');
-    if ($action === 'test') {
-        try {
-            if (empty($current['api_key_encrypted'])) {
-                throw new RuntimeException('ยังไม่ได้บันทึก API Key ของสถานศึกษานี้');
-            }
-            $result = AiClient::test($current, Crypto::decrypt((string) $current['api_key_encrypted']));
-            Repo::markAiTest($schoolId, 'ok', (int) $result['ms']);
-            Repo::logAi($schoolId, (int) $user['id'], 'test', 'เชื่อมต่อสำเร็จ');
-            flash($result['message']);
-        } catch (Throwable $exception) {
-            Repo::markAiTest($schoolId, 'fail', null);
-            flash($exception->getMessage(), 'err');
-        }
+    if ($action === 'pick') {
+        ai_pick_model($schoolId);
         redirect('/ai');
     }
+    if (!in_array($user['role'], ['superadmin', 'school_admin'], true)) {
+        http_response_code(403);
+        render('forbidden', ['currentPage' => ''], 'app');
+        exit;
+    }
+    if (Repo::ai($schoolId) === null) {
+        insert_default_ai(Database::pdo(), $schoolId);
+    }
+    try {
+        if ($action === 'add') {
+            ai_add_credential($user, $schoolId);
+        } elseif ($action === 'refresh') {
+            ai_refresh_credential($user, $schoolId);
+        } elseif ($action === 'models') {
+            ai_save_models($schoolId);
+        } elseif ($action === 'delete') {
+            Repo::deleteCredential($schoolId, (int) post_string('credential_id'));
+            flash('ลบชุด API Key แล้ว');
+        } elseif ($action === 'permissions') {
+            Repo::saveAiPermissions($schoolId, [
+                'allow_act' => isset($_POST['allow_act']) ? 1 : 0,
+                'require_confirm' => isset($_POST['require_confirm']) ? 1 : 0,
+                'suggest_contact' => isset($_POST['suggest_contact']) ? 1 : 0,
+                'log_actions' => isset($_POST['log_actions']) ? 1 : 0,
+            ], (int) $user['id']);
+            flash('บันทึกขอบเขตการทำงานของผู้ช่วย AI แล้ว');
+        } else {
+            throw new RuntimeException('คำสั่งไม่ถูกต้อง');
+        }
+    } catch (Throwable $exception) {
+        flash($exception->getMessage(), 'err');
+    }
+    redirect('/ai');
+}
 
+function ai_pick_model(int $schoolId): void
+{
+    $modelId = (int) post_string('model_id');
+    $chosen = null;
+    foreach (Repo::enabledModels($schoolId) as $model) {
+        if ((int) $model['id'] === $modelId) {
+            $chosen = $model;
+            break;
+        }
+    }
+    if ($chosen === null) {
+        flash('โมเดลนี้ไม่ได้เปิดใช้งาน', 'err');
+        return;
+    }
+    $_SESSION['ai_model_id'][$schoolId] = $modelId;
+    flash('ใช้โมเดล ' . $chosen['model_name'] . ' ในการทำงาน');
+}
+
+function ai_add_credential(array $user, int $schoolId): void
+{
+    $parsed = ai_connection_from_post();
+    $apiKey = trim((string) ($_POST['api_key'] ?? ''));
+    if ($apiKey === '' || strlen($apiKey) > 500) {
+        throw new RuntimeException('กรอก API Key');
+    }
+    $result = AiClient::listModels($parsed, $apiKey);
+    $label = post_string('label');
+    if ($label === '') {
+        $label = $parsed['name'];
+    }
+    if (mb_strlen($label) > 128) {
+        throw new RuntimeException('ชื่อชุดคีย์ยาวเกิน 128 ตัว');
+    }
+    Repo::addCredential($schoolId, [
+        'label' => $label,
+        'provider' => $parsed['provider'],
+        'base_url' => $parsed['base_url'],
+        'api_key_encrypted' => Crypto::encrypt($apiKey),
+        'api_key_hint' => Crypto::hint($apiKey),
+        'last_test_ms' => (int) $result['ms'],
+    ], $result['models'], (int) $user['id']);
+    Repo::logAi($schoolId, (int) $user['id'], 'test', 'เพิ่มชุดคีย์ ' . $label);
+    flash($result['message'] . ' เลือกเปิดใช้งานโมเดลจากรายการของชุดนี้');
+}
+
+function ai_refresh_credential(array $user, int $schoolId): void
+{
+    $credentialId = (int) post_string('credential_id');
+    $credential = Repo::credentialKey($schoolId, $credentialId);
+    if ($credential === null || empty($credential['api_key_encrypted'])) {
+        throw new RuntimeException('ไม่พบชุด API Key ของสถานศึกษานี้');
+    }
+    try {
+        $result = AiClient::listModels($credential, Crypto::decrypt((string) $credential['api_key_encrypted']));
+        Repo::refreshModels($schoolId, $credentialId, $result['models'], (int) $result['ms']);
+        Repo::logAi($schoolId, (int) $user['id'], 'test', 'ดึงรายการโมเดลของ ' . $credential['label']);
+        flash($result['message']);
+    } catch (Throwable $exception) {
+        Repo::markCredentialTest($schoolId, $credentialId, 'fail', null);
+        throw $exception;
+    }
+}
+
+function ai_save_models(int $schoolId): void
+{
+    $credentialId = (int) post_string('credential_id');
+    $enabled = $_POST['enabled'] ?? [];
+    if (!is_array($enabled)) {
+        $enabled = [];
+    }
+    Repo::saveEnabledModels($schoolId, $credentialId, $enabled, (int) post_string('default_model'));
+    flash('บันทึกโมเดลที่เปิดใช้งานแล้ว');
+}
+
+function ai_connection_from_post(): array
+{
     $catalog = ai_catalog();
     $provider = post_string('provider');
     if (!isset($catalog[$provider])) {
-        flash('ผู้ให้บริการไม่ถูกต้อง', 'err');
-        redirect('/ai');
+        throw new RuntimeException('ผู้ให้บริการไม่ถูกต้อง');
     }
     $baseUrl = post_string('base_url');
-    $model = post_string('model');
     if (!preg_match('#^https?://#i', $baseUrl) || mb_strlen($baseUrl) > 255) {
-        flash('Base URL ต้องขึ้นต้นด้วย http:// หรือ https://', 'err');
-        redirect('/ai');
+        throw new RuntimeException('Base URL ต้องขึ้นต้นด้วย http:// หรือ https://');
     }
-    if ($model === '' || mb_strlen($model) > 128) {
-        flash('ระบุชื่อโมเดล', 'err');
-        redirect('/ai');
-    }
-    $newKey = trim((string) ($_POST['api_key'] ?? ''));
-    $encrypted = $current['api_key_encrypted'];
-    $hint = $current['api_key_hint'];
-    $changedSecret = false;
-    if ($newKey !== '') {
-        $encrypted = Crypto::encrypt($newKey);
-        $hint = Crypto::hint($newKey);
-        $changedSecret = true;
-    }
-    $changed = $changedSecret
-        || $provider !== (string) $current['provider']
-        || $baseUrl !== (string) $current['base_url']
-        || $model !== (string) $current['model'];
-    Repo::saveAi($schoolId, [
+    return [
         'provider' => $provider,
         'base_url' => $baseUrl,
-        'api_key_encrypted' => $encrypted,
-        'api_key_hint' => $hint,
-        'model' => $model,
-        'allow_act' => isset($_POST['allow_act']) ? 1 : 0,
-        'require_confirm' => isset($_POST['require_confirm']) ? 1 : 0,
-        'suggest_contact' => isset($_POST['suggest_contact']) ? 1 : 0,
-        'log_actions' => isset($_POST['log_actions']) ? 1 : 0,
-        'last_test_at' => $changed ? null : $current['last_test_at'],
-        'last_test_status' => $changed ? null : $current['last_test_status'],
-        'last_test_ms' => $changed ? null : $current['last_test_ms'],
-        'updated_by' => (int) $user['id'],
-    ]);
-    flash('บันทึกการเชื่อมต่อ AI ของสถานศึกษานี้แล้ว');
-    redirect('/ai');
+        'name' => $catalog[$provider]['name'],
+    ];
 }
 
 function page_chat(): void
@@ -617,6 +769,15 @@ function page_chat(): void
             'ai' => 1,
             'text' => 'สวัสดีค่ะ ฉันเป็นผู้ช่วย AI ของระบบจัดตาราง สั่งงานได้ตามสิทธิ์ของบทบาทคุณ เช่น จัดตารางอัตโนมัติ วิเคราะห์ทักษะครู หรือตรวจขนาดห้องเรียน',
         ]];
+    }
+    $modelId = (int) post_string('model_id');
+    if ($modelId > 0) {
+        foreach (Repo::enabledModels($schoolId) as $model) {
+            if ((int) $model['id'] === $modelId) {
+                $_SESSION['ai_model_id'][$schoolId] = $modelId;
+                break;
+            }
+        }
     }
     $reply = $text === '' ? 'พิมพ์สิ่งที่ต้องการได้เลยค่ะ' : Assistant::reply($user, $schoolId, $text);
     if ($text !== '') {

@@ -17,7 +17,7 @@ final class Repo
             return (int) $statement->fetchColumn();
         };
         return [
-            'teachers' => $count('SELECT COUNT(*) FROM teachers WHERE school_id = :school_id'),
+            'teachers' => $count('SELECT COUNT(*) FROM teachers WHERE school_id = :school_id AND is_active = 1'),
             'groups' => $count('SELECT COUNT(*) FROM student_groups WHERE school_id = :school_id'),
             'subjects' => $count('SELECT COUNT(*) FROM subjects WHERE school_id = :school_id'),
             'rooms' => $count('SELECT COUNT(*) FROM rooms WHERE school_id = :school_id'),
@@ -37,7 +37,7 @@ final class Repo
 
     public static function teachers(int $schoolId): array
     {
-        $statement = Database::pdo()->prepare('SELECT * FROM teachers WHERE school_id = :school_id ORDER BY id');
+        $statement = Database::pdo()->prepare('SELECT * FROM teachers WHERE school_id = :school_id AND is_active = 1 ORDER BY id');
         $statement->execute(['school_id' => $schoolId]);
         $teachers = $statement->fetchAll();
         $skills = Database::pdo()->prepare('SELECT skill FROM teacher_skills WHERE teacher_id = :teacher_id ORDER BY id');
@@ -292,6 +292,276 @@ final class Repo
             'ms' => $ms,
             'school_id' => $schoolId,
         ]);
+    }
+
+    public static function saveAiPermissions(int $schoolId, array $flags, int $userId): void
+    {
+        $current = self::ai($schoolId);
+        if ($current === null) {
+            insert_default_ai(Database::pdo(), $schoolId);
+        }
+        $statement = Database::pdo()->prepare(
+            'UPDATE ai_settings SET
+                allow_act = :allow_act,
+                require_confirm = :require_confirm,
+                suggest_contact = :suggest_contact,
+                log_actions = :log_actions,
+                updated_by = :updated_by,
+                updated_at = NOW()
+             WHERE school_id = :school_id'
+        );
+        $statement->execute([
+            'allow_act' => $flags['allow_act'],
+            'require_confirm' => $flags['require_confirm'],
+            'suggest_contact' => $flags['suggest_contact'],
+            'log_actions' => $flags['log_actions'],
+            'updated_by' => $userId,
+            'school_id' => $schoolId,
+        ]);
+    }
+
+    public static function credentialsWithModels(int $schoolId): array
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT id, label, provider, base_url, api_key_hint, last_test_at, last_test_status, last_test_ms
+             FROM ai_credentials WHERE school_id = :school_id ORDER BY id'
+        );
+        $statement->execute(['school_id' => $schoolId]);
+        $rows = $statement->fetchAll();
+        $models = Database::pdo()->prepare(
+            'SELECT id, credential_id, model_name, enabled FROM ai_models WHERE school_id = :school_id ORDER BY model_name'
+        );
+        $models->execute(['school_id' => $schoolId]);
+        $grouped = [];
+        foreach ($models->fetchAll() as $model) {
+            $grouped[(int) $model['credential_id']][] = $model;
+        }
+        foreach ($rows as &$row) {
+            $row['models'] = $grouped[(int) $row['id']] ?? [];
+        }
+        unset($row);
+        return $rows;
+    }
+
+    public static function enabledModels(int $schoolId): array
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT m.id, m.model_name, m.credential_id, c.label, c.provider, c.last_test_status
+             FROM ai_models m
+             JOIN ai_credentials c ON c.id = m.credential_id AND c.school_id = m.school_id
+             WHERE m.school_id = :school_id AND m.enabled = 1
+             ORDER BY c.label, m.model_name'
+        );
+        $statement->execute(['school_id' => $schoolId]);
+        return $statement->fetchAll();
+    }
+
+    public static function resolveModel(int $schoolId, int $preferredId): ?array
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT m.id, m.model_name, c.provider, c.base_url, c.api_key_encrypted, c.last_test_status, c.label
+             FROM ai_models m
+             JOIN ai_credentials c ON c.id = m.credential_id AND c.school_id = m.school_id
+             WHERE m.school_id = :school_id AND m.enabled = 1
+             ORDER BY m.id'
+        );
+        $statement->execute(['school_id' => $schoolId]);
+        $rows = $statement->fetchAll();
+        if ($rows === []) {
+            return null;
+        }
+        $settings = self::ai($schoolId);
+        $defaultId = (int) ($settings['working_model_id'] ?? 0);
+        $fallback = null;
+        foreach ($rows as $row) {
+            $id = (int) $row['id'];
+            if ($preferredId > 0 && $id === $preferredId) {
+                return $row;
+            }
+            if ($fallback === null && $id === $defaultId) {
+                $fallback = $row;
+            }
+        }
+        return $fallback ?? $rows[0];
+    }
+
+    public static function addCredential(int $schoolId, array $fields, array $models, int $userId): int
+    {
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
+        try {
+            $statement = $pdo->prepare(
+                'INSERT INTO ai_credentials (
+                    school_id, label, provider, base_url, api_key_encrypted, api_key_hint,
+                    last_test_at, last_test_status, last_test_ms, updated_by
+                 ) VALUES (
+                    :school_id, :label, :provider, :base_url, :api_key_encrypted, :api_key_hint,
+                    NOW(), \'ok\', :last_test_ms, :updated_by
+                 )'
+            );
+            $statement->execute([
+                'school_id' => $schoolId,
+                'label' => $fields['label'],
+                'provider' => $fields['provider'],
+                'base_url' => $fields['base_url'],
+                'api_key_encrypted' => $fields['api_key_encrypted'],
+                'api_key_hint' => $fields['api_key_hint'],
+                'last_test_ms' => $fields['last_test_ms'],
+                'updated_by' => $userId,
+            ]);
+            $id = (int) $pdo->lastInsertId();
+            self::insertModels($pdo, $schoolId, $id, $models, []);
+            $pdo->commit();
+            return $id;
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    public static function refreshModels(int $schoolId, int $credentialId, array $models, int $ms): void
+    {
+        $pdo = Database::pdo();
+        $current = self::credentialKey($schoolId, $credentialId);
+        if ($current === null) {
+            throw new RuntimeException('ไม่พบชุด API Key ของสถานศึกษานี้');
+        }
+        $existing = $pdo->prepare(
+            'SELECT model_name, enabled FROM ai_models WHERE school_id = :school_id AND credential_id = :credential_id'
+        );
+        $existing->execute(['school_id' => $schoolId, 'credential_id' => $credentialId]);
+        $enabled = [];
+        foreach ($existing->fetchAll() as $row) {
+            if ((int) $row['enabled'] === 1) {
+                $enabled[(string) $row['model_name']] = true;
+            }
+        }
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('DELETE FROM ai_models WHERE school_id = :school_id AND credential_id = :credential_id')
+                ->execute(['school_id' => $schoolId, 'credential_id' => $credentialId]);
+            self::insertModels($pdo, $schoolId, $credentialId, $models, $enabled);
+            $pdo->prepare(
+                'UPDATE ai_credentials SET last_test_at = NOW(), last_test_status = \'ok\', last_test_ms = :ms WHERE id = :id AND school_id = :school_id'
+            )->execute(['ms' => $ms, 'id' => $credentialId, 'school_id' => $schoolId]);
+            self::repairWorkingModel($pdo, $schoolId);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    public static function markCredentialTest(int $schoolId, int $credentialId, string $status, ?int $ms): void
+    {
+        $statement = Database::pdo()->prepare(
+            'UPDATE ai_credentials SET last_test_at = NOW(), last_test_status = :status, last_test_ms = :ms
+             WHERE id = :id AND school_id = :school_id'
+        );
+        $statement->execute([
+            'status' => $status,
+            'ms' => $ms,
+            'id' => $credentialId,
+            'school_id' => $schoolId,
+        ]);
+    }
+
+    public static function credentialKey(int $schoolId, int $credentialId): ?array
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT id, label, provider, base_url, api_key_encrypted FROM ai_credentials WHERE id = :id AND school_id = :school_id'
+        );
+        $statement->execute(['id' => $credentialId, 'school_id' => $schoolId]);
+        $row = $statement->fetch();
+        return $row ?: null;
+    }
+
+    public static function saveEnabledModels(int $schoolId, int $credentialId, array $enabledIds, int $defaultId): void
+    {
+        $pdo = Database::pdo();
+        if (self::credentialKey($schoolId, $credentialId) === null) {
+            throw new RuntimeException('ไม่พบชุด API Key ของสถานศึกษานี้');
+        }
+        $enabledIds = array_values(array_unique(array_filter(array_map('intval', $enabledIds))));
+        if ($defaultId > 0 && !in_array($defaultId, $enabledIds, true)) {
+            $enabledIds[] = $defaultId;
+        }
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('UPDATE ai_models SET enabled = 0 WHERE school_id = :school_id AND credential_id = :credential_id')
+                ->execute(['school_id' => $schoolId, 'credential_id' => $credentialId]);
+            if ($enabledIds !== []) {
+                $marks = implode(',', array_fill(0, count($enabledIds), '?'));
+                $statement = $pdo->prepare(
+                    'UPDATE ai_models SET enabled = 1 WHERE school_id = ? AND credential_id = ? AND id IN (' . $marks . ')'
+                );
+                $statement->execute(array_merge([$schoolId, $credentialId], $enabledIds));
+            }
+            if ($defaultId > 0) {
+                $check = $pdo->prepare(
+                    'SELECT id FROM ai_models WHERE id = :id AND school_id = :school_id AND enabled = 1'
+                );
+                $check->execute(['id' => $defaultId, 'school_id' => $schoolId]);
+                if ($check->fetchColumn()) {
+                    $pdo->prepare('UPDATE ai_settings SET working_model_id = :id WHERE school_id = :school_id')
+                        ->execute(['id' => $defaultId, 'school_id' => $schoolId]);
+                }
+            }
+            self::repairWorkingModel($pdo, $schoolId);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    public static function deleteCredential(int $schoolId, int $credentialId): void
+    {
+        $pdo = Database::pdo();
+        $pdo->prepare('DELETE FROM ai_credentials WHERE id = :id AND school_id = :school_id')
+            ->execute(['id' => $credentialId, 'school_id' => $schoolId]);
+        self::repairWorkingModel($pdo, $schoolId);
+    }
+
+    private static function insertModels(PDO $pdo, int $schoolId, int $credentialId, array $models, array $enabled): void
+    {
+        $statement = $pdo->prepare(
+            'INSERT INTO ai_models (credential_id, school_id, model_name, enabled)
+             VALUES (:credential_id, :school_id, :model_name, :enabled)'
+        );
+        foreach ($models as $name) {
+            $statement->execute([
+                'credential_id' => $credentialId,
+                'school_id' => $schoolId,
+                'model_name' => $name,
+                'enabled' => isset($enabled[$name]) ? 1 : 0,
+            ]);
+        }
+    }
+
+    private static function repairWorkingModel(PDO $pdo, int $schoolId): void
+    {
+        $current = $pdo->prepare('SELECT working_model_id FROM ai_settings WHERE school_id = :school_id');
+        $current->execute(['school_id' => $schoolId]);
+        $workingId = (int) $current->fetchColumn();
+        if ($workingId > 0) {
+            $still = $pdo->prepare('SELECT id FROM ai_models WHERE id = :id AND school_id = :school_id AND enabled = 1');
+            $still->execute(['id' => $workingId, 'school_id' => $schoolId]);
+            if ($still->fetchColumn()) {
+                return;
+            }
+        }
+        $next = $pdo->prepare('SELECT id FROM ai_models WHERE school_id = :school_id AND enabled = 1 ORDER BY id LIMIT 1');
+        $next->execute(['school_id' => $schoolId]);
+        $id = $next->fetchColumn();
+        $pdo->prepare('UPDATE ai_settings SET working_model_id = :id WHERE school_id = :school_id')
+            ->execute(['id' => $id ? (int) $id : null, 'school_id' => $schoolId]);
     }
 
     public static function logAi(int $schoolId, ?int $userId, string $action, string $detail): void

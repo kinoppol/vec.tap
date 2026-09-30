@@ -178,6 +178,20 @@ td small, td strong { display: block; }
 .perm { flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #F4EFF5; }
 .perm small, .perm strong { display: block; }
 .test-row { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+.key-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.key-card + .key-card { margin-top: 16px; }
+.model-list { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 4px 12px; }
+.model-list label { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #F4EFF5; }
+.model-list em { color: var(--muted); font-style: normal; font-size: 12px; }
+.rms-list { display: grid; gap: 12px; }
+.rms-item { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 14px 0; border-bottom: 1px solid #F4EFF5; }
+.rms-item p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.progress { height: 8px; background: #F3EEF4; border-radius: 99px; overflow: hidden; }
+.progress span { display: block; height: 100%; width: 0; background: var(--pink); }
+.progress.scan span { width: 40%; animation: rms-scan 1.1s ease-in-out infinite; }
+@keyframes rms-scan { 0% { transform: translateX(-120%); } 100% { transform: translateX(280%); } }
+.chat-model { display: block; padding: 10px 14px 0; font-size: 12px; color: var(--muted); }
+.chat-model select { width: 100%; margin-top: 4px; }
 .user-list { list-style: none; padding: 0; }
 .user-list li { padding: 8px 0; border-bottom: 1px solid #F4EFF5; }
 .user-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }

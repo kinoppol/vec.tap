@@ -3,15 +3,35 @@ declare(strict_types=1);
 
 final class AiClient
 {
-    public static function test(array $settings, string $apiKey): array
+    public static function listModels(array $settings, string $apiKey): array
     {
         $started = microtime(true);
-        $text = self::complete($settings, $apiKey, 'ตอบสั้น ๆ ว่า pong', [], 16);
-        $ms = (int) round((microtime(true) - $started) * 1000);
-        if (trim($text) === '') {
-            throw new RuntimeException('API ตอบกลับว่าง');
+        $names = ($settings['provider'] ?? '') === 'google'
+            ? self::googleModels($settings, $apiKey)
+            : self::openaiModels($settings, $apiKey);
+        $clean = [];
+        foreach ($names as $name) {
+            $name = trim((string) $name);
+            if ($name === '' || strlen($name) > 191 || isset($clean[$name])) {
+                continue;
+            }
+            $clean[$name] = true;
         }
-        return ['ok' => true, 'ms' => $ms, 'message' => 'เชื่อมต่อสำเร็จ · ตอบกลับใน ' . $ms . ' ms'];
+        $models = array_keys($clean);
+        sort($models, SORT_STRING);
+        if (count($models) > 400) {
+            $models = array_slice($models, 0, 400);
+        }
+        if ($models === []) {
+            throw new RuntimeException('เชื่อมต่อได้แต่ไม่พบรายการโมเดล');
+        }
+        $ms = (int) round((microtime(true) - $started) * 1000);
+        return [
+            'ok' => true,
+            'ms' => $ms,
+            'models' => $models,
+            'message' => 'เชื่อมต่อสำเร็จ พบ ' . count($models) . ' โมเดล · ' . $ms . ' ms',
+        ];
     }
 
     public static function chat(array $settings, string $apiKey, string $system, array $history): string
@@ -100,6 +120,95 @@ final class AiClient
         ];
     }
 
+    private static function openaiModels(array $settings, string $apiKey): array
+    {
+        $base = rtrim((string) $settings['base_url'], '/');
+        if (str_ends_with($base, '/chat/completions')) {
+            $base = substr($base, 0, -strlen('/chat/completions'));
+        }
+        $json = self::get($base . '/models', [
+            'Accept: application/json',
+            'Authorization: Bearer ' . $apiKey,
+        ], $apiKey);
+        $names = [];
+        foreach ($json['data'] ?? [] as $row) {
+            if (is_array($row) && isset($row['id'])) {
+                $names[] = (string) $row['id'];
+            }
+        }
+        return $names;
+    }
+
+    private static function googleModels(array $settings, string $apiKey): array
+    {
+        $base = rtrim((string) $settings['base_url'], '/');
+        if (str_ends_with($base, ':generateContent')) {
+            $base = preg_replace('#/models/[^/]+:generateContent$#', '', $base) ?? $base;
+        }
+        $names = [];
+        $page = '';
+        for ($i = 0; $i < 5; $i++) {
+            $url = $base . '/models?key=' . rawurlencode($apiKey) . '&pageSize=100';
+            if ($page !== '') {
+                $url .= '&pageToken=' . rawurlencode($page);
+            }
+            $json = self::get($url, ['Accept: application/json'], $apiKey);
+            foreach ($json['models'] ?? [] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $name = (string) ($row['baseModelId'] ?? $row['name'] ?? '');
+                $name = preg_replace('#^models/#', '', $name) ?? $name;
+                if ($name !== '') {
+                    $names[] = $name;
+                }
+            }
+            $page = (string) ($json['nextPageToken'] ?? '');
+            if ($page === '') {
+                break;
+            }
+        }
+        return $names;
+    }
+
+    private static function get(string $url, array $headers, string $apiKey): array
+    {
+        if (!function_exists('curl_init')) {
+            throw new RuntimeException('เซิร์ฟเวอร์ไม่มีส่วนขยาย cURL สำหรับเรียก API');
+        }
+        $handle = curl_init($url);
+        curl_setopt_array($handle, [
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 25,
+            CURLOPT_CONNECTTIMEOUT => 8,
+        ]);
+        $raw = curl_exec($handle);
+        $errno = curl_errno($handle);
+        $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        curl_close($handle);
+        if ($raw === false || $errno !== 0) {
+            throw new RuntimeException('เชื่อมต่อ API ไม่สำเร็จ');
+        }
+        $json = json_decode((string) $raw, true);
+        if ($status >= 400 || !is_array($json)) {
+            $message = 'API ตอบกลับข้อผิดพลาด';
+            if (is_array($json)) {
+                $message = (string) ($json['error']['message'] ?? $json['error']['status'] ?? $message);
+            }
+            throw new RuntimeException(self::safe($message, $apiKey) . ' (HTTP ' . $status . ')');
+        }
+        return $json;
+    }
+
+    private static function safe(string $message, string $apiKey): string
+    {
+        if ($apiKey !== '') {
+            $message = str_replace($apiKey, '***', $message);
+        }
+        return $message;
+    }
+
     private static function request(string $url, array $headers, array $body): array
     {
         if (!function_exists('curl_init')) {
@@ -127,6 +236,7 @@ final class AiClient
             if (is_array($json)) {
                 $message = (string) ($json['error']['message'] ?? $json['error']['status'] ?? $message);
             }
+            $message = preg_replace('/(key=)[^&\s]+/i', '$1***', $message) ?? $message;
             throw new RuntimeException($message . ' (HTTP ' . $status . ')');
         }
         return ['json' => $json];
