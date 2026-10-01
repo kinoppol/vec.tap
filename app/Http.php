@@ -495,7 +495,7 @@ function page_rms(): void
     $user = Auth::requireRole(['superadmin', 'school_admin', 'scheduler']);
     $schoolId = SchoolContext::id();
     $resource = (string) ($_GET['view'] ?? 'students');
-    if (!in_array($resource, ['students', 'groups', 'holidays', 'schedules'], true)) {
+    if (!in_array($resource, ['students', 'groups', 'plans', 'holidays', 'schedules'], true)) {
         $resource = 'students';
     }
     render('rms', [

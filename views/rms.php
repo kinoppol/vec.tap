@@ -49,6 +49,7 @@
             ['terms', 'ปฏิทินภาคเรียน', 'เพิ่มหรืออัปเดตภาคเรียน ไม่เปลี่ยนภาคเรียนปัจจุบันที่ตั้งไว้', (int) ($counts['terms'] ?? 0) . ' ภาคเรียน'],
             ['holidays', 'วันหยุด', 'ต้องมีปฏิทินภาคเรียนตรงกันก่อน วันหยุดที่หาภาคเรียนไม่เจอจะถูกข้าม', (int) ($counts['holidays'] ?? 0) . ' วัน'],
             ['groups', 'กลุ่มเรียน', 'ผูกกับภาคเรียนและครูที่ปรึกษาตามชื่อหรือรหัสบุคลากร', (int) ($counts['groups'] ?? 0) . ' กลุ่ม'],
+            ['plans', 'แผนการเรียน', 'จากตาราง std2018_curi_plan สร้างแผนและรายวิชา ท-ป-น แล้วผูกกับกลุ่มเรียนในภาคเรียนเดียวกัน ควรนำเข้ากลุ่มเรียนก่อน', (int) ($counts['plans'] ?? 0) . ' แผน'],
             ['students', 'ผู้เรียน', 'โหลดทีละ 100 รายการ แล้วนับจำนวนผู้เรียนใส่กลุ่ม', (int) ($counts['students'] ?? 0) . ' คน'],
             ['schedules', 'ตารางเรียน', 'ใช้ภาคเรียนปัจจุบัน สร้างรายวิชา ห้อง อาคาร และลงคาบที่อ่านวันกับเวลาได้', (int) ($counts['schedules'] ?? 0) . ' คาบ'],
         ];
@@ -68,7 +69,7 @@
 <section class="card stack">
     <h2>ตรวจสอบข้อมูลที่นำเข้า</h2>
     <div class="tabs">
-        <?php foreach (['students' => 'ผู้เรียน', 'groups' => 'กลุ่มเรียน', 'holidays' => 'วันหยุด', 'schedules' => 'ตารางเรียน'] as $key => $label): ?>
+        <?php foreach (['students' => 'ผู้เรียน', 'groups' => 'กลุ่มเรียน', 'plans' => 'แผนการเรียน', 'holidays' => 'วันหยุด', 'schedules' => 'ตารางเรียน'] as $key => $label): ?>
             <a class="tab <?= $browse['resource'] === $key ? 'on' : '' ?>" href="<?= e(url('/rms?view=' . $key)) ?>"><?= e($label) ?></a>
         <?php endforeach; ?>
     </div>
@@ -112,6 +113,7 @@
         { key: 'terms', mode: 'once' },
         { key: 'holidays', mode: 'once' },
         { key: 'groups', mode: 'once' },
+        { key: 'plans', mode: 'scan', row: 500 },
         { key: 'students', mode: 'count', row: 100 },
         { key: 'schedules', mode: 'scan', row: 1000 },
     ];

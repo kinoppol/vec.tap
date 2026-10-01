@@ -8,6 +8,7 @@ final class Rms
         'terms' => 'dateedu',
         'holidays' => 'stopday',
         'groups' => 'std2018_studentgroup',
+        'plans' => 'std2018_curi_plan',
         'students' => 'std2018_student',
         'schedules' => 'studing',
     ];
@@ -89,6 +90,7 @@ final class Rms
             'terms' => self::syncTerms($schoolId),
             'holidays' => self::syncHolidays($schoolId),
             'groups' => self::syncGroups($schoolId),
+            'plans' => self::syncPlans($schoolId, $offset, $row),
             'students' => self::syncStudents($schoolId, $offset, $row),
             'schedules' => self::syncSchedules($schoolId, $offset, $row),
             default => throw new RuntimeException('ชุดข้อมูลไม่ถูกต้อง'),
@@ -130,6 +132,7 @@ final class Rms
             'terms' => $one('SELECT COUNT(*) FROM terms WHERE school_id = :school_id AND rms_key IS NOT NULL'),
             'holidays' => $one('SELECT COUNT(*) FROM holidays WHERE school_id = :school_id'),
             'groups' => $one('SELECT COUNT(*) FROM student_groups WHERE school_id = :school_id AND rms_group_code IS NOT NULL'),
+            'plans' => $one('SELECT COUNT(*) FROM study_plans WHERE school_id = :school_id AND rms_key IS NOT NULL'),
             'students' => $one('SELECT COUNT(*) FROM students WHERE school_id = :school_id'),
             'schedules' => $one('SELECT COUNT(*) FROM rms_schedules WHERE school_id = :school_id'),
         ];
@@ -150,6 +153,13 @@ final class Rms
                 'where' => 'g.school_id = :school_id AND g.rms_group_code IS NOT NULL',
                 'search' => ['g.name', 'g.rms_group_code', 'g.level'],
                 'order' => 't.id DESC, g.name',
+            ],
+            'plans' => [
+                'select' => 'p.name AS plan_name, t.label AS term_label, s.code AS code, s.name AS subject_name, s.theory AS theory, s.practice AS practice, s.extra AS extra',
+                'from' => 'study_plans p JOIN terms t ON t.id = p.term_id LEFT JOIN subjects s ON s.plan_id = p.id',
+                'where' => 'p.school_id = :school_id AND p.rms_key IS NOT NULL',
+                'search' => ['p.name', 's.code', 's.name', 't.label'],
+                'order' => 't.id DESC, p.name, s.code',
             ],
             'holidays' => [
                 'select' => 'h.name AS name, h.holiday_date AS holiday_date, t.label AS term_label',
@@ -469,6 +479,156 @@ final class Rms
         return ['added' => $added, 'updated' => $updated, 'skipped' => $skipped, 'fetched' => count($rows)];
     }
 
+    private static function syncPlans(int $schoolId, int $offset, int $row): array
+    {
+        $rows = self::fetch($schoolId, 'plans', ['limit' => $offset . ',' . $row]);
+        $pdo = Database::pdo();
+        $plansCreated = 0;
+        $subjectsCreated = 0;
+        $subjectsUpdated = 0;
+        $skipped = 0;
+        $findPlan = $pdo->prepare(
+            'SELECT id FROM study_plans WHERE school_id = :school_id AND term_id = :term_id AND rms_key = :rms_key LIMIT 1'
+        );
+        $insertPlan = $pdo->prepare(
+            'INSERT INTO study_plans (school_id, term_id, name, credits, rms_key) VALUES (:school_id, :term_id, :name, 0, :rms_key)'
+        );
+        $renamePlan = $pdo->prepare(
+            'UPDATE study_plans SET name = :name WHERE id = :id AND school_id = :school_id AND name <> :name_same'
+        );
+        $findSubject = $pdo->prepare(
+            'SELECT id FROM subjects WHERE school_id = :school_id AND plan_id = :plan_id AND code = :code LIMIT 1'
+        );
+        $updateSubject = $pdo->prepare(
+            'UPDATE subjects SET name = :name, theory = :theory, practice = :practice, extra = :extra
+             WHERE id = :id AND school_id = :school_id'
+        );
+        $insertSubject = $pdo->prepare(
+            'INSERT INTO subjects (school_id, plan_id, code, name, theory, practice, extra, sort_order)
+             VALUES (:school_id, :plan_id, :code, :name, :theory, :practice, :extra, :sort_order)'
+        );
+        $link = $pdo->prepare(
+            'UPDATE student_groups SET plan_id = :plan_id
+             WHERE school_id = :school_id AND term_id = :term_id AND rms_group_code = :code'
+        );
+        $groupName = $pdo->prepare(
+            'SELECT name, level FROM student_groups WHERE school_id = :school_id AND term_id = :term_id AND rms_group_code = :code LIMIT 1'
+        );
+        foreach ($rows as $index => $row) {
+            if (!is_array($row)) {
+                $skipped++;
+                continue;
+            }
+            $year = self::field($row, ['academicYear', 'eduYear', 'edu_year', 'year', 'aca_year']);
+            $semester = self::field($row, ['semester', 'semes', 'term', 'edu_term']);
+            $combined = self::field($row, ['dateedu_eduyear', 'eduyear', 'eduYear']);
+            if ($combined !== '' && str_contains($combined, '/')) {
+                $termKey = $combined;
+            } elseif ($semester !== '' && $year !== '') {
+                $termKey = $semester . '/' . $year;
+            } else {
+                $skipped++;
+                continue;
+            }
+            $code = self::field($row, ['subjectCode', 'subject_code', 'real_subject_id', 'subject_id', 'subjCode', 'curiCode', 'courseCode', 'รหัสวิชา']);
+            $name = self::field($row, ['subjectName', 'subject_name', 'subjName', 'curiName', 'courseName', 'ชื่อวิชา']);
+            if ($code === '' || $name === '') {
+                $skipped++;
+                continue;
+            }
+            $code = mb_substr($code, 0, 32);
+            $name = mb_substr($name, 0, 255);
+            [$theory, $practice, $extra] = self::subjectHours($row);
+            $groupCode = self::field($row, ['groupCode', 'group_code', 'student_group_id', 'studentGroupId', 'groupId', 'รหัสกลุ่ม']);
+            $planCode = self::field($row, ['planCode', 'plan_code', 'curiPlanCode', 'curriculumCode', 'รหัสแผน']);
+            $planName = self::field($row, ['planName', 'plan_name', 'curiPlanName', 'curriculumName', 'majorName', 'majorNameTh', 'ชื่อแผน']);
+            $termId = self::ensureTerm($schoolId, $termKey);
+            if ($groupCode !== '') {
+                $rmsKey = mb_substr('g:' . $groupCode, 0, 80);
+                $groupName->execute(['school_id' => $schoolId, 'term_id' => $termId, 'code' => $groupCode]);
+                $group = $groupName->fetch();
+                if ($planName === '' && $group) {
+                    $planName = trim((string) $group['level'] . ' ' . (string) $group['name']);
+                }
+                if ($planName === '') {
+                    $planName = 'แผน ' . $groupCode;
+                }
+            } else {
+                $rmsKey = mb_substr('p:' . ($planCode !== '' ? $planCode : $planName), 0, 80);
+                if ($planName === '') {
+                    $planName = $planCode !== '' ? 'แผน ' . $planCode : 'แผนจาก RMS ' . $termKey;
+                }
+            }
+            $planName = mb_substr($planName, 0, 255);
+            $findPlan->execute(['school_id' => $schoolId, 'term_id' => $termId, 'rms_key' => $rmsKey]);
+            $planId = (int) $findPlan->fetchColumn();
+            if ($planId <= 0) {
+                $insertPlan->execute([
+                    'school_id' => $schoolId,
+                    'term_id' => $termId,
+                    'name' => $planName,
+                    'rms_key' => $rmsKey,
+                ]);
+                $planId = (int) $pdo->lastInsertId();
+                $plansCreated++;
+            } else {
+                $renamePlan->execute([
+                    'name' => $planName,
+                    'id' => $planId,
+                    'school_id' => $schoolId,
+                    'name_same' => $planName,
+                ]);
+            }
+            $findSubject->execute(['school_id' => $schoolId, 'plan_id' => $planId, 'code' => $code]);
+            $subjectId = (int) $findSubject->fetchColumn();
+            if ($subjectId > 0) {
+                $updateSubject->execute([
+                    'name' => $name,
+                    'theory' => $theory,
+                    'practice' => $practice,
+                    'extra' => $extra,
+                    'id' => $subjectId,
+                    'school_id' => $schoolId,
+                ]);
+                $subjectsUpdated++;
+            } else {
+                $insertSubject->execute([
+                    'school_id' => $schoolId,
+                    'plan_id' => $planId,
+                    'code' => $code,
+                    'name' => $name,
+                    'theory' => $theory,
+                    'practice' => $practice,
+                    'extra' => $extra,
+                    'sort_order' => $offset + $index,
+                ]);
+                $subjectsCreated++;
+            }
+            if ($groupCode !== '') {
+                $link->execute([
+                    'plan_id' => $planId,
+                    'school_id' => $schoolId,
+                    'term_id' => $termId,
+                    'code' => $groupCode,
+                ]);
+            }
+        }
+        $pdo->prepare(
+            'UPDATE study_plans p
+             SET credits = (
+                SELECT COALESCE(SUM(s.theory + s.practice), 0) FROM subjects s WHERE s.plan_id = p.id
+             )
+             WHERE p.school_id = :school_id AND p.rms_key IS NOT NULL'
+        )->execute(['school_id' => $schoolId]);
+        return [
+            'added' => $plansCreated,
+            'updated' => $subjectsUpdated,
+            'inserted' => $subjectsCreated,
+            'skipped' => $skipped,
+            'fetched' => count($rows),
+        ];
+    }
+
     private static function syncStudents(int $schoolId, int $offset, int $row): array
     {
         $rows = self::fetch($schoolId, 'students', ['limit' => $offset . ',' . $row]);
@@ -618,7 +778,7 @@ final class Rms
         $groupCode = trim((string) ($row['student_group_id'] ?? ''));
         $pdo = Database::pdo();
         $group = $pdo->prepare(
-            'SELECT id, level FROM student_groups WHERE school_id = :school_id AND term_id = :term_id AND rms_group_code = :code LIMIT 1'
+            'SELECT id, level, plan_id FROM student_groups WHERE school_id = :school_id AND term_id = :term_id AND rms_group_code = :code LIMIT 1'
         );
         $group->execute(['school_id' => $schoolId, 'term_id' => (int) $term['id'], 'code' => $groupCode]);
         $groupRow = $group->fetch();
@@ -634,7 +794,11 @@ final class Rms
             return false;
         }
         $code = mb_substr($code, 0, 32);
-        $planId = self::ensurePlan($schoolId, (int) $term['id'], 'แผนจาก RMS ' . $term['rms_key']);
+        $groupPlanId = (int) ($groupRow['plan_id'] ?? 0);
+        $keepCurriculumHours = $groupPlanId > 0;
+        $planId = $keepCurriculumHours
+            ? $groupPlanId
+            : self::ensurePlan($schoolId, (int) $term['id'], 'แผนจาก RMS ' . $term['rms_key']);
         $teacherId = self::teacherId($schoolId, (string) ($row['teacher_id'] ?? ''), (string) ($row['teacher_name'] ?? ''));
         $roomId = self::ensureRoom($schoolId, (string) ($row['roomName'] ?? ''), (string) ($row['ucode'] ?? ''));
         $subject = $pdo->prepare('SELECT id, theory FROM subjects WHERE school_id = :school_id AND plan_id = :plan_id AND code = :code LIMIT 1');
@@ -654,17 +818,30 @@ final class Rms
         }
         if ($subjectRow) {
             $subjectId = (int) $subjectRow['id'];
-            $pdo->prepare(
-                'UPDATE subjects SET name = :name, theory = theory + :hours, teacher_id = COALESCE(teacher_id, :teacher_id), room_id = COALESCE(room_id, :room_id)
-                 WHERE id = :id AND school_id = :school_id'
-            )->execute([
-                'name' => $name,
-                'hours' => $span[1],
-                'teacher_id' => $teacherId,
-                'room_id' => $roomId,
-                'id' => $subjectId,
-                'school_id' => $schoolId,
-            ]);
+            if ($keepCurriculumHours) {
+                $pdo->prepare(
+                    'UPDATE subjects SET name = :name, teacher_id = COALESCE(teacher_id, :teacher_id), room_id = COALESCE(room_id, :room_id)
+                     WHERE id = :id AND school_id = :school_id'
+                )->execute([
+                    'name' => $name,
+                    'teacher_id' => $teacherId,
+                    'room_id' => $roomId,
+                    'id' => $subjectId,
+                    'school_id' => $schoolId,
+                ]);
+            } else {
+                $pdo->prepare(
+                    'UPDATE subjects SET name = :name, theory = theory + :hours, teacher_id = COALESCE(teacher_id, :teacher_id), room_id = COALESCE(room_id, :room_id)
+                     WHERE id = :id AND school_id = :school_id'
+                )->execute([
+                    'name' => $name,
+                    'hours' => $span[1],
+                    'teacher_id' => $teacherId,
+                    'room_id' => $roomId,
+                    'id' => $subjectId,
+                    'school_id' => $schoolId,
+                ]);
+            }
         } else {
             $pdo->prepare(
                 'INSERT INTO subjects (school_id, plan_id, code, name, theory, practice, extra, sort_order, teacher_id, room_id)
@@ -832,6 +1009,40 @@ final class Rms
             return 'ป.ตรี';
         }
         return trim($grade);
+    }
+
+    private static function field(array $row, array $keys): string
+    {
+        $lower = [];
+        foreach ($row as $key => $value) {
+            $lower[strtolower((string) $key)] = $value;
+        }
+        foreach ($keys as $key) {
+            $value = $lower[strtolower($key)] ?? null;
+            $value = trim((string) $value);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+        return '';
+    }
+
+    private static function subjectHours(array $row): array
+    {
+        $theory = self::intOrNull(self::field($row, ['theory', 'theo', 'hour_theory', 'hourT', 'theoryHour', 'credit_t', 'ท']));
+        $practice = self::intOrNull(self::field($row, ['practice', 'prac', 'hour_practice', 'hourP', 'practiceHour', 'credit_p', 'ป']));
+        $extra = self::intOrNull(self::field($row, ['extra', 'self', 'selfStudy', 'hour_self', 'hourN', 'selfHour', 'credit_n', 'น']));
+        $blob = self::field($row, ['credit', 'credits', 'unit', 'creditHour', 'tpn', 'hour', 'หน่วยกิต']);
+        if ($theory === null && $practice === null && preg_match('/(\d+)\s*[-–]\s*(\d+)\s*[-–]\s*(\d+)/u', $blob, $match)) {
+            return [(int) $match[1], (int) $match[2], (int) $match[3]];
+        }
+        $theory = $theory ?? 0;
+        $practice = $practice ?? 0;
+        $extra = $extra ?? 0;
+        if ($theory === 0 && $practice === 0 && $extra === 0 && preg_match('/^\d+$/', $blob)) {
+            $theory = (int) $blob;
+        }
+        return [$theory, $practice, $extra];
     }
 
     private static function textOrNull(mixed $value): ?string
