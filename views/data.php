@@ -24,6 +24,22 @@ $tabs = [
             </form>
         <?php endif; ?>
     <?php endif; ?>
+    <?php if ($tab === 'rooms'): ?>
+        <a class="btn" href="<?= e(url('/data/buildings-export')) ?>"><i class="bi bi-download"></i> ส่งออกอาคาร</a>
+        <a class="btn" href="<?= e(url('/data/rooms-export')) ?>"><i class="bi bi-download"></i> ส่งออกห้องเรียน</a>
+        <?php if ($canEdit): ?>
+            <form method="post" action="<?= e(url('/data')) ?>" enctype="multipart/form-data" class="inline">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="action" value="import_buildings">
+                <label class="btn file-btn"><i class="bi bi-upload"></i> นำเข้าอาคาร<input type="file" name="file" accept=".csv,.txt,.xlsx" onchange="this.form.submit()"></label>
+            </form>
+            <form method="post" action="<?= e(url('/data')) ?>" enctype="multipart/form-data" class="inline">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="action" value="import_rooms">
+                <label class="btn file-btn"><i class="bi bi-upload"></i> นำเข้าห้องเรียน<input type="file" name="file" accept=".csv,.txt,.xlsx" onchange="this.form.submit()"></label>
+            </form>
+        <?php endif; ?>
+    <?php endif; ?>
     <?php if (in_array($tab, ['teachers', 'groups', 'subjects'], true)): ?>
         <a class="btn" href="<?= e(url('/data/template?tab=' . $tab)) ?>"><i class="bi bi-file-earmark-arrow-down"></i> ดาวน์โหลดแม่แบบ</a>
         <form method="post" action="<?= e(url('/data')) ?>" enctype="multipart/form-data" class="inline">
@@ -231,6 +247,7 @@ if ($minMode === 'required' && $maxMode === 'required') {
     </table>
 </div>
 <?php else: ?>
+<p class="hint">นำเข้าอาคารจับคู่ด้วยชื่อ และนำเข้าห้องเรียนจับคู่ด้วยรหัสห้อง รายการที่ไม่มีในไฟล์จะไม่ถูกลบ ถ้าเป็นอาคารใหม่ให้นำเข้าอาคารก่อน แล้วจึงนำเข้าห้องที่อ้างชื่ออาคารนั้น ช่องพิกัดที่เว้นว่างจะไม่ลบหมุดเดิม</p>
 <div class="split">
     <section class="card">
         <header class="card-head"><strong>อาคารเรียนและพิกัด</strong><span class="hint">ละติจูด, ลองจิจูด</span></header>

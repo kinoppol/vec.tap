@@ -6,6 +6,30 @@ final class ScheduleEngine
     public const DAYS = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'];
     public const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
 
+    public static function lessonCells(array $lessons): array
+    {
+        $grid = [];
+        for ($day = 0; $day < 5; $day++) {
+            $grid[$day] = [];
+            for ($period = 1; $period <= 10; $period++) {
+                $grid[$day][$period] = [];
+            }
+        }
+        foreach ($lessons as $lesson) {
+            $day = (int) ($lesson['day_index'] ?? -1);
+            $start = (int) ($lesson['start_period'] ?? 0);
+            $length = max(1, (int) ($lesson['length_periods'] ?? 1));
+            if ($day < 0 || $day > 4 || $start < 1) {
+                continue;
+            }
+            $end = min(10, $start + $length - 1);
+            for ($period = $start; $period <= $end; $period++) {
+                $grid[$day][$period][] = $lesson;
+            }
+        }
+        return $grid;
+    }
+
     public static function lunchState(array $policies, string $level): string
     {
         $code = ($level === 'ปวส.' || $level === 'ป.ตรี') ? 'lunch_hvc' : 'lunch_pvc';

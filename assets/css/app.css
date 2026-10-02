@@ -327,6 +327,31 @@ details pre { white-space: pre-wrap; background: #FDFBFD; padding: 10px; border-
 .chat-tools [data-mic].on { background: #DC3545; color: #fff; }
 .skills-split td small { color: var(--muted); }
 
+.print-tools select { border: 1px solid #E2D8E4; border-radius: 8px; padding: 8px 10px; background: #fff; max-width: 360px; }
+.print-sheet { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.print-sheet header h2 { margin: 0 0 4px; font-size: 18px; }
+.print-sheet header p { margin: 0 0 12px; color: var(--muted); }
+.print-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+.print-table th, .print-table td { border: 1px solid #E2D8E4; vertical-align: top; padding: 4px; }
+.print-table thead th { text-align: center; font-weight: 600; }
+.print-table thead small, .print-lesson small { display: block; color: var(--muted); font-weight: 400; }
+.print-table tbody th { width: 64px; text-align: left; }
+.print-lesson { display: block; }
+.print-lesson + .print-lesson { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #E2D8E4; }
+.print-lesson strong { font-family: "IBM Plex Mono", monospace; font-size: 10px; }
+.print-table td.is-lunch { background: #F6F1F7; text-align: center; color: var(--muted); }
+.print-break { font-size: 11px; }
+
+@media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    .sidebar, .topbar, .page-title, .chat, .fab, .print-tools, .banner { display: none !important; }
+    body, .app-shell, .workspace, .page { display: block; background: #fff; height: auto; padding: 0; margin: 0; }
+    .print-sheet { border: 0; border-radius: 0; padding: 0; break-after: page; }
+    .print-sheet:last-child { break-after: auto; }
+    .print-table { font-size: 8px; }
+    .print-table th, .print-table td { border-color: #999; }
+}
+
 @media (max-width: 980px) {
     .app-shell { flex-direction: column; }
     .sidebar { width: 100%; height: auto; position: relative; }

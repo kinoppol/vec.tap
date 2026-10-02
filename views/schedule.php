@@ -30,6 +30,7 @@
         <span><i class="swatch break"></i>พัก / นอกเวลา</span>
     </div>
     <div class="spacer"></div>
+    <a class="btn" href="<?= e(url('/print?kind=group&id=' . (int) $model['group']['id'])) ?>"><i class="bi bi-printer"></i> พิมพ์ตารางเรียน</a>
     <form method="post" action="<?= e(url('/schedule')) ?>" class="inline">
         <?= Csrf::field() ?>
         <input type="hidden" name="group_id" value="<?= (int) $model['group']['id'] ?>">

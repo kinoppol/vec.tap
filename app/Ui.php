@@ -29,6 +29,7 @@ function app_shell(string $currentPage): array
     $main = [
         $item('dashboard', 'แดชบอร์ด', 'bi-grid-1x2'),
         $item('schedule', 'จัดตารางเรียน', 'bi-calendar3-week'),
+        $item('print', 'พิมพ์ตาราง', 'bi-printer'),
         $item('policies', 'นโยบายการจัดตาราง', 'bi-sliders'),
         $item('skills', 'วิเคราะห์ทักษะครู', 'bi-diagram-3'),
     ];
@@ -73,6 +74,7 @@ function app_shell(string $currentPage): array
         'pageTitle' => [
             'dashboard' => 'แดชบอร์ด',
             'schedule' => 'จัดตารางเรียน',
+            'print' => 'พิมพ์ตาราง',
             'policies' => 'นโยบายการจัดตาราง',
             'skills' => 'วิเคราะห์ทักษะครูและแบ่งรายวิชา',
             'data' => 'ข้อมูลพื้นฐาน',

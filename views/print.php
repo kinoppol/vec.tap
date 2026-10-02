@@ -1,0 +1,83 @@
+<?php
+$kinds = [
+    'group' => 'ตารางเรียน',
+    'teacher' => 'ตารางสอน',
+    'room' => 'ตารางใช้ห้องเรียน',
+];
+$kindQuery = 'kind=' . rawurlencode($kind);
+?>
+<div class="toolbar print-tools">
+    <div class="tabs">
+        <?php foreach ($kinds as $key => $label): ?>
+            <a class="tab <?= $kind === $key ? 'on' : '' ?>" href="<?= e(url('/print?' . 'kind=' . $key)) ?>"><?= e($label) ?></a>
+        <?php endforeach; ?>
+    </div>
+    <?php if ($options !== []): ?>
+        <form method="get" action="<?= e(url('/print')) ?>" class="inline">
+            <input type="hidden" name="kind" value="<?= e($kind) ?>">
+            <select name="id" onchange="this.form.submit()" aria-label="เลือกรายการที่จะพิมพ์">
+                <?php foreach ($options as $option): ?>
+                    <option value="<?= (int) $option['id'] ?>" <?= (int) $option['id'] === $selectedId ? 'selected' : '' ?>><?= e($option['label']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </form>
+        <?php if ($showAll): ?>
+            <a class="btn" href="<?= e(url('/print?' . $kindQuery . '&id=' . $selectedId)) ?>">แสดงทีละรายการ</a>
+        <?php else: ?>
+            <a class="btn" href="<?= e(url('/print?' . $kindQuery . '&all=1')) ?>">แสดงทั้งหมด</a>
+        <?php endif; ?>
+        <button class="btn btn-primary" type="button" onclick="window.print()"><i class="bi bi-printer"></i> พิมพ์</button>
+    <?php endif; ?>
+</div>
+<?php if ($showAll): ?><p class="hint print-tools">กำลังแสดงเฉพาะรายการที่มีคาบเรียนแล้ว กดพิมพ์เพื่อสั่งพิมพ์ทั้งหมด</p><?php endif; ?>
+<?php if ($options === []): ?>
+    <p class="empty">ยังไม่มีข้อมูลสำหรับพิมพ์ตารางนี้</p>
+<?php elseif ($sheets === []): ?>
+    <p class="empty">ยังไม่มีคาบเรียนให้พิมพ์</p>
+<?php endif; ?>
+<?php foreach ($sheets as $sheet): ?>
+    <article class="print-sheet">
+        <header>
+            <h2><?= e($sheet['title']) ?></h2>
+            <p><?= e(trim($schoolName . ($termLabel !== '' ? ' · ' . $termLabel : ''))) ?><?php if ($sheet['note'] !== ''): ?> · <?= e($sheet['note']) ?><?php endif; ?></p>
+        </header>
+        <table class="print-table">
+            <thead>
+                <tr>
+                    <th>วัน</th>
+                    <?php for ($period = 1; $period <= 10; $period++): ?>
+                        <th>คาบ <?= $period ?><small><?= e(ScheduleEngine::TIMES[$period - 1]) ?>–<?= e(ScheduleEngine::TIMES[$period]) ?></small></th>
+                    <?php endfor; ?>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach (ScheduleEngine::DAYS as $day => $dayName): ?>
+                <tr>
+                    <th><?= e($dayName) ?></th>
+                    <?php for ($period = 1; $period <= 10; $period++): ?>
+                        <?php $items = $sheet['grid'][$day][$period]; ?>
+                        <td class="<?= $items === [] && (int) $sheet['lunch'] === $period ? 'is-lunch' : '' ?>">
+                            <?php if ($items === [] && (int) $sheet['lunch'] === $period): ?>
+                                <span class="print-break">พัก</span>
+                            <?php endif; ?>
+                            <?php foreach ($items as $item): ?>
+                                <span class="print-lesson">
+                                    <strong><?= e((string) $item['subject_code']) ?></strong>
+                                    <?= e((string) $item['subject_name']) ?>
+                                    <?php if ($kind === 'group'): ?>
+                                        <small><?= e((string) ($item['teacher_name'] ?: 'ยังไม่ระบุครู')) ?> · <?= e((string) ($item['room_code'] ?: 'ยังไม่ระบุห้อง')) ?></small>
+                                    <?php elseif ($kind === 'teacher'): ?>
+                                        <small><?= e((string) $item['group_name']) ?> · <?= e((string) ($item['room_code'] ?: 'ยังไม่ระบุห้อง')) ?></small>
+                                    <?php else: ?>
+                                        <small><?= e((string) $item['group_name']) ?> · <?= e((string) ($item['teacher_name'] ?: 'ยังไม่ระบุครู')) ?></small>
+                                    <?php endif; ?>
+                                </span>
+                            <?php endforeach; ?>
+                        </td>
+                    <?php endfor; ?>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </article>
+<?php endforeach; ?>

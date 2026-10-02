@@ -78,6 +78,18 @@ function dispatch(): void
         page_teacher_skills_export();
         return;
     }
+    if ($path === '/data/buildings-export' && $method === 'GET') {
+        page_buildings_export();
+        return;
+    }
+    if ($path === '/data/rooms-export' && $method === 'GET') {
+        page_rooms_export();
+        return;
+    }
+    if ($path === '/print' && $method === 'GET') {
+        page_print();
+        return;
+    }
     if ($path === '/rms' && $method === 'GET') {
         page_rms();
         return;
@@ -689,6 +701,186 @@ function page_teacher_skills_export(): void
     Spreadsheet::csvDownload(['ชื่อ', 'ทักษะ'], Repo::teacherSkillExportRows($schoolId), 'teacher-skills.csv');
 }
 
+function page_buildings_export(): void
+{
+    Auth::requireUser();
+    $schoolId = SchoolContext::id();
+    if ($schoolId <= 0) {
+        flash('ยังไม่มีสถานศึกษาสำหรับส่งออกอาคาร', 'err');
+        redirect('/data?tab=rooms');
+    }
+    Spreadsheet::csvDownload(
+        ['ชื่อ', 'ชื่อย่อ', 'วิทยาเขต', 'ละติจูด', 'ลองจิจูด', 'ระยะเดิน'],
+        Repo::buildingExportRows($schoolId),
+        'buildings.csv'
+    );
+}
+
+function page_rooms_export(): void
+{
+    Auth::requireUser();
+    $schoolId = SchoolContext::id();
+    if ($schoolId <= 0) {
+        flash('ยังไม่มีสถานศึกษาสำหรับส่งออกห้องเรียน', 'err');
+        redirect('/data?tab=rooms');
+    }
+    Spreadsheet::csvDownload(
+        ['รหัสห้อง', 'อาคาร', 'ประเภท', 'ความจุ'],
+        Repo::roomExportRows($schoolId),
+        'rooms.csv'
+    );
+}
+
+function page_print(): void
+{
+    Auth::requireUser();
+    $schoolId = SchoolContext::id();
+    $kind = (string) ($_GET['kind'] ?? 'group');
+    if (!in_array($kind, ['group', 'teacher', 'room'], true)) {
+        $kind = 'group';
+    }
+    $showAll = (string) ($_GET['all'] ?? '') === '1';
+    $selectedId = (int) ($_GET['id'] ?? 0);
+    $lessons = $schoolId > 0 ? Repo::placedLessons($schoolId) : [];
+    $policies = $schoolId > 0 ? Repo::policies($schoolId) : [];
+    $options = print_options(
+        $kind,
+        $schoolId > 0 ? Repo::groups($schoolId) : [],
+        $schoolId > 0 ? Repo::teachers($schoolId) : [],
+        $schoolId > 0 ? Repo::rooms($schoolId) : [],
+        $lessons,
+        $policies
+    );
+    if (!$showAll && $selectedId <= 0 && $options !== []) {
+        $selectedId = (int) $options[0]['id'];
+    }
+    $targets = [];
+    foreach ($options as $option) {
+        if ($showAll || (int) $option['id'] === $selectedId) {
+            $targets[] = $option;
+        }
+    }
+    if (!$showAll && $targets === [] && $options !== []) {
+        $targets = [$options[0]];
+        $selectedId = (int) $options[0]['id'];
+    }
+    $sheets = [];
+    foreach ($targets as $option) {
+        $mine = [];
+        foreach ($lessons as $lesson) {
+            if ((int) ($lesson[$option['key']] ?? 0) === (int) $option['id']) {
+                $mine[] = $lesson;
+            }
+        }
+        if ($showAll && $mine === []) {
+            continue;
+        }
+        $sheets[] = [
+            'title' => $option['heading'] . ' ' . $option['label'],
+            'note' => $option['note'],
+            'lunch' => $option['lunch'],
+            'grid' => ScheduleEngine::lessonCells($mine),
+        ];
+    }
+    $school = $schoolId > 0 ? SchoolContext::current() : null;
+    $term = $schoolId > 0 ? Repo::term($schoolId) : null;
+    render('print', [
+        'currentPage' => 'print',
+        'kind' => $kind,
+        'showAll' => $showAll,
+        'selectedId' => $selectedId,
+        'options' => $options,
+        'sheets' => $sheets,
+        'schoolName' => (string) ($school['name'] ?? ''),
+        'termLabel' => (string) ($term['label'] ?? ''),
+    ]);
+}
+
+function print_options(string $kind, array $groups, array $teachers, array $rooms, array $lessons, array $policies): array
+{
+    $options = [];
+    if ($kind === 'teacher') {
+        $seen = [];
+        foreach ($teachers as $teacher) {
+            $id = (int) $teacher['id'];
+            $seen[$id] = true;
+            $options[] = [
+                'id' => $id,
+                'key' => 'teacher_id',
+                'label' => (string) $teacher['name'],
+                'heading' => 'ตารางสอน',
+                'note' => (string) $teacher['dept'],
+                'lunch' => 0,
+            ];
+        }
+        foreach ($lessons as $lesson) {
+            $id = (int) ($lesson['teacher_id'] ?? 0);
+            if ($id <= 0 || isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $options[] = [
+                'id' => $id,
+                'key' => 'teacher_id',
+                'label' => (string) ($lesson['teacher_name'] ?? ''),
+                'heading' => 'ตารางสอน',
+                'note' => '',
+                'lunch' => 0,
+            ];
+        }
+        return $options;
+    }
+    if ($kind === 'room') {
+        $seen = [];
+        foreach ($rooms as $room) {
+            $id = (int) $room['id'];
+            $seen[$id] = true;
+            $building = (string) ($room['building_name'] ?? '');
+            $options[] = [
+                'id' => $id,
+                'key' => 'room_id',
+                'label' => (string) $room['code'] . ($building !== '' ? ' · ' . $building : ''),
+                'heading' => 'ตารางใช้ห้องเรียน',
+                'note' => trim((string) $room['room_type'] . ($room['capacity'] ? ' · ' . (int) $room['capacity'] . ' ที่นั่ง' : '')),
+                'lunch' => 0,
+            ];
+        }
+        foreach ($lessons as $lesson) {
+            $id = (int) ($lesson['room_id'] ?? 0);
+            if ($id <= 0 || isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $options[] = [
+                'id' => $id,
+                'key' => 'room_id',
+                'label' => (string) ($lesson['room_code'] ?? ''),
+                'heading' => 'ตารางใช้ห้องเรียน',
+                'note' => '',
+                'lunch' => 0,
+            ];
+        }
+        return $options;
+    }
+    foreach ($groups as $group) {
+        $level = (string) $group['level'];
+        $lunchState = ScheduleEngine::lunchState($policies, $level);
+        $lunch = 0;
+        if ($lunchState !== 'off') {
+            $lunch = ($level === 'ปวส.' || $level === 'ป.ตรี') ? 5 : 4;
+        }
+        $options[] = [
+            'id' => (int) $group['id'],
+            'key' => 'group_id',
+            'label' => (string) $group['name'],
+            'heading' => 'ตารางเรียน',
+            'note' => trim($level . ' · ' . (int) $group['student_count'] . ' คน'),
+            'lunch' => $lunch,
+        ];
+    }
+    return $options;
+}
+
 function page_rms(): void
 {
     $user = Auth::requireRole(['superadmin', 'school_admin', 'scheduler']);
@@ -921,6 +1113,26 @@ function page_data_post(): void
             flash($message, 'err');
         }
         redirect('/data?tab=teachers');
+    }
+    if ($action === 'import_buildings' || $action === 'import_rooms') {
+        if (!ScheduleActions::canEdit($user) || $schoolId <= 0) {
+            flash('บทบาทนี้นำเข้าอาคารหรือห้องเรียนไม่ได้', 'err');
+            redirect('/data?tab=rooms');
+        }
+        try {
+            $rows = uploaded_rows();
+            if ($action === 'import_buildings') {
+                $count = Repo::importBuildingRows($schoolId, $rows);
+                flash('นำเข้าอาคาร ' . $count . ' หลังแล้ว');
+            } else {
+                $count = Repo::importRoomRows($schoolId, $rows);
+                flash('นำเข้าห้องเรียน ' . $count . ' ห้องแล้ว');
+            }
+        } catch (Throwable $exception) {
+            $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'นำเข้าไม่สำเร็จ';
+            flash($message, 'err');
+        }
+        redirect('/data?tab=rooms');
     }
     $tab = post_string('tab');
     if (!in_array($tab, ['teachers', 'groups', 'subjects'], true)) {

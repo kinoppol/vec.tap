@@ -414,6 +414,206 @@ final class Repo
         return $statement->fetchAll();
     }
 
+    public static function placedLessons(int $schoolId): array
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT e.day_index, e.start_period, e.length_periods,
+                    g.id AS group_id, g.name AS group_name,
+                    s.code AS subject_code, s.name AS subject_name,
+                    t.id AS teacher_id, t.name AS teacher_name,
+                    r.id AS room_id, r.code AS room_code
+             FROM timetable_entries e
+             JOIN student_groups g ON g.id = e.group_id
+             JOIN subjects s ON s.id = e.subject_id
+             LEFT JOIN teachers t ON t.id = s.teacher_id
+             LEFT JOIN rooms r ON r.id = s.room_id
+             WHERE e.school_id = :school_id
+             ORDER BY e.day_index, e.start_period, e.id'
+        );
+        $statement->execute(['school_id' => $schoolId]);
+        return $statement->fetchAll();
+    }
+
+    public static function buildingExportRows(int $schoolId): array
+    {
+        $rows = [];
+        foreach (self::buildings($schoolId) as $building) {
+            $rows[] = [
+                $building['name'],
+                $building['short_name'],
+                $building['campus'],
+                $building['lat'],
+                $building['lng'],
+                $building['dist_label'],
+            ];
+        }
+        return $rows;
+    }
+
+    public static function roomExportRows(int $schoolId): array
+    {
+        $rows = [];
+        foreach (self::rooms($schoolId) as $room) {
+            $rows[] = [
+                $room['code'],
+                (string) ($room['building_name'] ?? ''),
+                $room['room_type'],
+                (string) (int) $room['capacity'],
+            ];
+        }
+        return $rows;
+    }
+
+    public static function importBuildingRows(int $schoolId, array $rows): int
+    {
+        if (isset($rows[0][0]) && in_array(trim((string) $rows[0][0]), ['ชื่อ', 'ชื่ออาคาร'], true)) {
+            array_shift($rows);
+        }
+        $pdo = Database::pdo();
+        $find = $pdo->prepare('SELECT id, lat, lng FROM buildings WHERE school_id = :school_id AND name = :name LIMIT 1');
+        $insert = $pdo->prepare(
+            'INSERT INTO buildings (school_id, name, short_name, campus, lat, lng, dist_label)
+             VALUES (:school_id, :name, :short_name, :campus, :lat, :lng, :dist_label)'
+        );
+        $update = $pdo->prepare(
+            'UPDATE buildings
+             SET short_name = :short_name, campus = :campus, lat = :lat, lng = :lng, dist_label = :dist_label
+             WHERE id = :id AND school_id = :school_id'
+        );
+        $count = 0;
+        $pdo->beginTransaction();
+        try {
+            foreach ($rows as $row) {
+                $name = trim((string) ($row[0] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $name = mb_substr($name, 0, 255);
+                $shortName = trim((string) ($row[1] ?? ''));
+                if ($shortName === '') {
+                    $shortName = $name;
+                }
+                $point = self::optionalCoordinates((string) ($row[3] ?? ''), (string) ($row[4] ?? ''));
+                $fields = [
+                    'short_name' => mb_substr($shortName, 0, 64),
+                    'campus' => mb_substr(trim((string) ($row[2] ?? '')), 0, 255),
+                    'dist_label' => mb_substr(trim((string) ($row[5] ?? '')), 0, 64),
+                ];
+                $find->execute(['school_id' => $schoolId, 'name' => $name]);
+                $current = $find->fetch();
+                if ($current) {
+                    $fields['lat'] = $point === null ? (string) $current['lat'] : $point['lat'];
+                    $fields['lng'] = $point === null ? (string) $current['lng'] : $point['lng'];
+                    $fields['id'] = (int) $current['id'];
+                    $fields['school_id'] = $schoolId;
+                    $update->execute($fields);
+                } else {
+                    $insert->execute([
+                        'school_id' => $schoolId,
+                        'name' => $name,
+                        'short_name' => $fields['short_name'],
+                        'campus' => $fields['campus'],
+                        'lat' => $point === null ? '' : $point['lat'],
+                        'lng' => $point === null ? '' : $point['lng'],
+                        'dist_label' => $fields['dist_label'],
+                    ]);
+                }
+                $count++;
+            }
+            if ($count === 0) {
+                throw new RuntimeException('ไฟล์ไม่มีชื่ออาคาร');
+            }
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+        return $count;
+    }
+
+    public static function importRoomRows(int $schoolId, array $rows): int
+    {
+        if (isset($rows[0][0]) && in_array(trim((string) $rows[0][0]), ['รหัส', 'รหัสห้อง'], true)) {
+            array_shift($rows);
+        }
+        $buildings = [];
+        foreach (self::buildings($schoolId) as $building) {
+            if (!isset($buildings[$building['name']])) {
+                $buildings[$building['name']] = (int) $building['id'];
+            }
+        }
+        $pdo = Database::pdo();
+        $find = $pdo->prepare('SELECT id FROM rooms WHERE school_id = :school_id AND code = :code LIMIT 1');
+        $count = 0;
+        $pdo->beginTransaction();
+        try {
+            foreach ($rows as $row) {
+                $code = mb_substr(trim((string) ($row[0] ?? '')), 0, 32);
+                if ($code === '') {
+                    continue;
+                }
+                $buildingName = trim((string) ($row[1] ?? ''));
+                $buildingId = null;
+                if ($buildingName !== '') {
+                    if (!isset($buildings[$buildingName])) {
+                        throw new RuntimeException('ไม่พบอาคารชื่อ ' . $buildingName);
+                    }
+                    $buildingId = $buildings[$buildingName];
+                }
+                $capacityText = trim((string) ($row[3] ?? ''));
+                if ($capacityText === '') {
+                    $capacity = 0;
+                } elseif (!preg_match('/^\d+$/', $capacityText)) {
+                    throw new RuntimeException('ความจุของห้อง ' . $code . ' ต้องเป็นจำนวนเต็ม');
+                } else {
+                    $capacity = (int) $capacityText;
+                }
+                if ($capacity > 999) {
+                    throw new RuntimeException('ความจุของห้อง ' . $code . ' ต้องไม่เกิน 999');
+                }
+                $roomType = mb_substr(trim((string) ($row[2] ?? '')), 0, 255);
+                $find->execute(['school_id' => $schoolId, 'code' => $code]);
+                $roomId = (int) $find->fetchColumn();
+                if ($roomId > 0) {
+                    $update = $pdo->prepare(
+                        'UPDATE rooms SET building_id = :building_id, room_type = :room_type, capacity = :capacity
+                         WHERE id = :id AND school_id = :school_id'
+                    );
+                    $update->bindValue(':building_id', $buildingId, $buildingId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+                    $update->bindValue(':room_type', $roomType);
+                    $update->bindValue(':capacity', $capacity, PDO::PARAM_INT);
+                    $update->bindValue(':id', $roomId, PDO::PARAM_INT);
+                    $update->bindValue(':school_id', $schoolId, PDO::PARAM_INT);
+                    $update->execute();
+                } else {
+                    $insert = $pdo->prepare(
+                        'INSERT INTO rooms (school_id, building_id, code, room_type, capacity)
+                         VALUES (:school_id, :building_id, :code, :room_type, :capacity)'
+                    );
+                    $insert->bindValue(':school_id', $schoolId, PDO::PARAM_INT);
+                    $insert->bindValue(':building_id', $buildingId, $buildingId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+                    $insert->bindValue(':code', $code);
+                    $insert->bindValue(':room_type', $roomType);
+                    $insert->bindValue(':capacity', $capacity, PDO::PARAM_INT);
+                    $insert->execute();
+                }
+                $count++;
+            }
+            if ($count === 0) {
+                throw new RuntimeException('ไฟล์ไม่มีรหัสห้อง');
+            }
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+        return $count;
+    }
+
     public static function addBuilding(int $schoolId, string $name, string $shortName, string $campus, string $distLabel, string $lat, string $lng): void
     {
         $name = trim($name);
@@ -533,6 +733,19 @@ final class Repo
              VALUES (:school_id, NULL, :code, \'\', 0)'
         )->execute(['school_id' => $schoolId, 'code' => $code]);
         return (int) $pdo->lastInsertId();
+    }
+
+    private static function optionalCoordinates(string $lat, string $lng): ?array
+    {
+        $lat = trim($lat);
+        $lng = trim($lng);
+        if ($lat === '' && $lng === '') {
+            return null;
+        }
+        if ($lat === '' || $lng === '') {
+            throw new RuntimeException('ละติจูดและลองจิจูดต้องกรอกคู่กัน');
+        }
+        return self::coordinates($lat, $lng);
     }
 
     private static function coordinates(string $lat, string $lng): array
