@@ -277,6 +277,18 @@ function page_schedule(): void
     ]);
 }
 
+function schedule_hour_value(string $value): int
+{
+    if ($value === '' || !preg_match('/^\d+$/', $value)) {
+        throw new RuntimeException('ชั่วโมง ท-ป-น ต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง 40');
+    }
+    $hours = (int) $value;
+    if ($hours > 40) {
+        throw new RuntimeException('ชั่วโมง ท-ป-น ต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง 40');
+    }
+    return $hours;
+}
+
 function teacher_max_guard(int $schoolId, int $teacherId, int $addedHours, int $termId = 0): array
 {
     if ($teacherId <= 0) {
@@ -322,7 +334,7 @@ function page_schedule_post(): void
     $arg3 = $parts[3] ?? '';
     $arg4 = $parts[4] ?? '';
     $ajax = wants_json();
-    $editable = ['pick', 'clear_pick', 'add', 'toggle', 'remove', 'reset', 'run', 'apply', 'move', 'resize', 'assign'];
+    $editable = ['pick', 'clear_pick', 'add', 'toggle', 'remove', 'reset', 'run', 'apply', 'move', 'resize', 'assign', 'hours'];
     if (in_array($name, $editable, true) && !ScheduleActions::canSchedule($user, $schoolId, $groupId)) {
         if ($ajax) {
             schedule_board_json(false, 'บทบาทนี้แก้ไขตารางไม่ได้');
@@ -471,6 +483,22 @@ function page_schedule_post(): void
             $update->execute();
             $_SESSION['selected_entry'] = $entryId;
             unset($_SESSION['pick']);
+        } elseif ($name === 'hours') {
+            $planId = (int) ($group['plan_id'] ?? 0);
+            $subjectId = (int) $arg;
+            $theory = schedule_hour_value(post_string('theory'));
+            $practice = schedule_hour_value(post_string('practice'));
+            $extra = schedule_hour_value(post_string('extra'));
+            $placed = 0;
+            foreach ($entries as $entry) {
+                if ((int) $entry['subject_id'] === $subjectId) {
+                    $placed += (int) $entry['length_periods'];
+                }
+            }
+            if ($theory + $practice < $placed) {
+                throw new RuntimeException('ชั่วโมงทฤษฎีกับปฏิบัติรวมกันน้อยกว่าคาบที่ลงไว้แล้ว ลบคาบออกก่อนแล้วค่อยลดชั่วโมง');
+            }
+            Repo::setSubjectHours($schoolId, $planId, $subjectId, $theory, $practice, $extra);
         } elseif ($name === 'clear_select') {
             unset($_SESSION['selected_entry']);
         } elseif ($name === 'toggle') {

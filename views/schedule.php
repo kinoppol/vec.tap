@@ -26,7 +26,8 @@ $termQuery = $termId > 0 ? 'term=' . $termId . '&' : '';
         }
     ?></div>
 <?php elseif ($model): ?>
-<div class="card toolbar">
+<div class="card toolbar schedule-bar">
+    <div class="schedule-bar-main">
     <?php if ($terms !== []): ?>
     <form method="get" action="<?= e(url('/schedule')) ?>" class="term-switch">
         <label>ภาคเรียน
@@ -59,20 +60,22 @@ $termQuery = $termId > 0 ? 'term=' . $termId . '&' : '';
             <p class="empty" data-group-empty hidden>ไม่พบกลุ่มที่ตรงกับคำค้น</p>
         </div>
     </div>
+    <div class="schedule-bar-actions">
+        <a class="btn" href="<?= e(url('/print?kind=group&' . $termQuery . 'id=' . (int) $model['group']['id'])) ?>"><i class="bi bi-printer"></i> พิมพ์ตารางเรียน</a>
+        <form method="post" action="<?= e(url('/schedule')) ?>" class="inline">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="group_id" value="<?= (int) $model['group']['id'] ?>">
+            <button class="btn" name="action" value="reset" <?= $model['can_edit'] ? '' : 'disabled' ?>><i class="bi bi-arrow-counterclockwise"></i> เริ่มใหม่</button>
+            <button class="btn btn-primary" name="action" value="run" <?= $model['can_edit'] ? '' : 'disabled' ?>><i class="bi bi-stars"></i> ให้ AI จัดตารางตามนโยบาย</button>
+        </form>
+    </div>
+    </div>
     <div class="legend">
         <span><i class="swatch manual"></i>ลงด้วยมือ (ล็อก)</span>
         <span><i class="swatch ai"></i>AI จัดให้</span>
         <span><i class="swatch warn"></i>ขัดข้อแนะนำ</span>
         <span><i class="swatch break"></i>พัก / นอกเวลา</span>
     </div>
-    <div class="spacer"></div>
-    <a class="btn" href="<?= e(url('/print?kind=group&' . $termQuery . 'id=' . (int) $model['group']['id'])) ?>"><i class="bi bi-printer"></i> พิมพ์ตารางเรียน</a>
-    <form method="post" action="<?= e(url('/schedule')) ?>" class="inline">
-        <?= Csrf::field() ?>
-        <input type="hidden" name="group_id" value="<?= (int) $model['group']['id'] ?>">
-        <button class="btn" name="action" value="reset" <?= $model['can_edit'] ? '' : 'disabled' ?>><i class="bi bi-arrow-counterclockwise"></i> เริ่มใหม่</button>
-        <button class="btn btn-primary" name="action" value="run" <?= $model['can_edit'] ? '' : 'disabled' ?>><i class="bi bi-stars"></i> ให้ AI จัดตารางตามนโยบาย</button>
-    </form>
 </div>
 <?php if (!$model['can_edit']): ?>
     <div class="banner warn"><i class="bi bi-info-circle"></i> บทบาทครูผู้สอนดูตารางได้อย่างเดียว หากต้องการเปลี่ยนคาบ ให้ติดต่อผู้จัดตาราง งานพัฒนาหลักสูตรการเรียนการสอน</div>
@@ -94,7 +97,7 @@ $termQuery = $termId > 0 ? 'term=' . $termId . '&' : '';
         note.hidden = text === "";
         note.textContent = text;
     };
-    const post = async (action) => {
+    const post = async (action, source = null) => {
         if (busy) return;
         busy = true;
         showNote("");
@@ -106,6 +109,12 @@ $termQuery = $termId > 0 ? 'term=' . $termId . '&' : '';
         if (assign && action === (assign.dataset.assign || "")) {
             body.set("teacher_name", assign.querySelector("[name=teacher_name]")?.value || "");
             body.set("room_code", assign.querySelector("[name=room_code]")?.value || "");
+        }
+        const hours = source?.closest("[data-hours]");
+        if (hours && action === (hours.dataset.hours || "")) {
+            body.set("theory", hours.querySelector("[name=theory]")?.value || "");
+            body.set("practice", hours.querySelector("[name=practice]")?.value || "");
+            body.set("extra", hours.querySelector("[name=extra]")?.value || "");
         }
         try {
             const response = await fetch(board.dataset.url || "", {
@@ -149,7 +158,14 @@ $termQuery = $termId > 0 ? 'term=' . $termId . '&' : '';
     };
 
     board.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" || !event.target.closest("[data-assign-field]")) return;
+        if (event.key !== "Enter") return;
+        const hours = event.target.closest("[data-hours]");
+        if (hours && event.target.closest("[data-hours-field]")) {
+            event.preventDefault();
+            post(hours.dataset.hours || "", event.target);
+            return;
+        }
+        if (!event.target.closest("[data-assign-field]")) return;
         const assign = event.target.closest("[data-assign]");
         if (!assign) return;
         event.preventDefault();
@@ -164,7 +180,7 @@ $termQuery = $termId > 0 ? 'term=' . $termId . '&' : '';
         }
         if (control.tagName === "BUTTON" && control.name === "action") return;
         event.preventDefault();
-        post(control.dataset.action || "");
+        post(control.dataset.action || "", control);
     });
 
     board.addEventListener("pointerdown", (event) => {

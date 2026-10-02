@@ -461,6 +461,40 @@ final class Repo
         return $statement->fetchAll();
     }
 
+    public static function setSubjectHours(int $schoolId, int $planId, int $subjectId, int $theory, int $practice, int $extra): void
+    {
+        if ($planId <= 0 || $subjectId <= 0) {
+            throw new RuntimeException('กลุ่มนี้ยังไม่มีแผนการเรียน จึงปรับ ท-ป-น ไม่ได้');
+        }
+        $pdo = Database::pdo();
+        $update = $pdo->prepare(
+            'UPDATE subjects SET theory = :theory, practice = :practice, extra = :extra
+             WHERE id = :id AND school_id = :school_id AND plan_id = :plan_id'
+        );
+        $update->execute([
+            'theory' => $theory,
+            'practice' => $practice,
+            'extra' => $extra,
+            'id' => $subjectId,
+            'school_id' => $schoolId,
+            'plan_id' => $planId,
+        ]);
+        if ($update->rowCount() === 0) {
+            $exists = $pdo->prepare(
+                'SELECT id FROM subjects WHERE id = :id AND school_id = :school_id AND plan_id = :plan_id LIMIT 1'
+            );
+            $exists->execute(['id' => $subjectId, 'school_id' => $schoolId, 'plan_id' => $planId]);
+            if (!$exists->fetchColumn()) {
+                throw new RuntimeException('ไม่พบรายวิชานี้ในแผนของกลุ่มที่กำลังจัด');
+            }
+        }
+        $pdo->prepare(
+            'UPDATE study_plans p
+             SET credits = (SELECT COALESCE(SUM(s.theory + s.practice), 0) FROM subjects s WHERE s.plan_id = p.id)
+             WHERE p.id = :id AND p.school_id = :school_id'
+        )->execute(['id' => $planId, 'school_id' => $schoolId]);
+    }
+
     public static function buildings(int $schoolId): array
     {
         $statement = Database::pdo()->prepare('SELECT * FROM buildings WHERE school_id = :school_id ORDER BY id');

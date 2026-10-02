@@ -115,10 +115,20 @@
         <?php endif; ?>
         <section class="card">
             <header class="card-head"><strong>ตรวจชั่วโมงตาม ท-ป-น</strong><em><?= (int) $model['placed'] ?>/<?= (int) $model['need'] ?></em></header>
+            <?php if ($model['can_edit']): ?><p class="hint">แก้ ท-ป-น แล้วกดบันทึก คาบที่ต้องลงเท่ากับชั่วโมงทฤษฎีบวกปฏิบัติ</p><?php endif; ?>
             <?php foreach ($model['hours'] as $hour): ?>
                 <div class="hour-row">
                     <span><?= e($hour['name']) ?></span>
-                    <em><?= e($hour['tpn']) ?></em>
+                    <?php if ($model['can_edit']): ?>
+                        <span class="tpn-edit" data-hours="hours:<?= (int) $hour['id'] ?>">
+                            <input name="theory" type="number" min="0" max="40" value="<?= (int) $hour['theory'] ?>" aria-label="ทฤษฎี" data-hours-field>
+                            <input name="practice" type="number" min="0" max="40" value="<?= (int) $hour['practice'] ?>" aria-label="ปฏิบัติ" data-hours-field>
+                            <input name="extra" type="number" min="0" max="40" value="<?= (int) $hour['extra'] ?>" aria-label="ศึกษาด้วยตนเอง" data-hours-field>
+                            <button type="button" data-action="hours:<?= (int) $hour['id'] ?>">บันทึก</button>
+                        </span>
+                    <?php else: ?>
+                        <em><?= e($hour['tpn']) ?></em>
+                    <?php endif; ?>
                     <b style="background: <?= e($hour['bg']) ?>; color: <?= e($hour['fg']) ?>"><?= (int) $hour['got'] ?>/<?= (int) $hour['need'] ?></b>
                 </div>
             <?php endforeach; ?>

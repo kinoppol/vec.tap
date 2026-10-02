@@ -326,7 +326,11 @@ final class ScheduleEngine
             $need += $subjectNeed;
             $placed += min($subjectNeed, $got);
             $hours[] = [
+                'id' => (int) $subject['id'],
                 'name' => $subject['name'],
+                'theory' => (int) $subject['theory'],
+                'practice' => (int) $subject['practice'],
+                'extra' => (int) $subject['extra'],
                 'tpn' => $subject['theory'] . '-' . $subject['practice'] . '-' . $subject['extra'],
                 'need' => $subjectNeed,
                 'got' => $got,
