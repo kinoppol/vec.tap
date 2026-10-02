@@ -245,7 +245,7 @@ final class ScheduleEngine
         return (int) $subject['theory'] + (int) $subject['practice'];
     }
 
-    public static function run(array $subjects, array $entries, string $level, bool $lockLunch = true): array
+    public static function run(array $subjects, array $entries, string $level, bool $lockLunch = true, array $twinHours = []): array
     {
         $kept = [];
         foreach ($entries as $entry) {
@@ -256,7 +256,7 @@ final class ScheduleEngine
         }
         $byKey = self::byKey($subjects);
         if ($byKey === []) {
-            $kept = self::greedy($subjects, $kept, $level, $lockLunch);
+            $kept = self::greedy($subjects, $kept, $level, $lockLunch, $twinHours);
         } else {
             foreach (self::partialPattern() as $pattern) {
                 if (!isset($byKey[$pattern['key']])) {
@@ -266,13 +266,13 @@ final class ScheduleEngine
                 if (self::overlaps($kept, $pattern['day'], $pattern['start'], $pattern['length'])) {
                     continue;
                 }
-                if (self::used($kept, (int) $subject['id']) + $pattern['length'] > self::need($subject)) {
+                if (self::covered($subject, $kept, $twinHours) + $pattern['length'] > self::need($subject)) {
                     continue;
                 }
                 $kept[] = self::make((int) $subject['id'], $pattern['day'], $pattern['start'], $pattern['length'], 0, null, 0);
             }
         }
-        $left = self::remaining($subjects, $kept);
+        $left = self::remaining($subjects, $kept, $twinHours);
         return ['entries' => $kept, 'phase' => $left > 0 ? 'partial' : 'done', 'applied' => null];
     }
 
@@ -342,7 +342,7 @@ final class ScheduleEngine
         return ['entries' => $entries, 'phase' => 'manual', 'applied' => null, 'restore' => 'end_by_17'];
     }
 
-    public static function addManual(array $subjects, array $entries, int $subjectId, int $day, int $period, string $level, bool $lockLunch = true): ?array
+    public static function addManual(array $subjects, array $entries, int $subjectId, int $day, int $period, string $level, bool $lockLunch = true, array $twinHours = []): ?array
     {
         $subject = null;
         foreach ($subjects as $item) {
@@ -355,7 +355,7 @@ final class ScheduleEngine
             return null;
         }
         $plain = array_map([self::class, 'plain'], $entries);
-        $left = self::need($subject) - self::used($plain, $subjectId);
+        $left = self::need($subject) - self::covered($subject, $plain, $twinHours);
         $length = 0;
         while ($length < min($left, 3) && $length < 2) {
             $slot = $period + $length;
@@ -371,7 +371,7 @@ final class ScheduleEngine
         return $plain;
     }
 
-    public static function placementError(array $subjects, array $entries, int $entryId, int $day, int $start, int $length, string $level, bool $lockLunch = true): ?string
+    public static function placementError(array $subjects, array $entries, int $entryId, int $day, int $start, int $length, string $level, bool $lockLunch = true, array $twinHours = []): ?string
     {
         if ($day < 0 || $day > 4 || $start < 1 || $length < 1 || $start + $length - 1 > 10) {
             return 'วางคาบนอกตารางไม่ได้';
@@ -403,7 +403,7 @@ final class ScheduleEngine
         if ($subject === null) {
             return 'ไม่พบรายวิชาของคาบนี้';
         }
-        if (self::used($others, $subjectId) + $length > self::need($subject)) {
+        if (self::covered($subject, $others, $twinHours) + $length > self::need($subject)) {
             return 'ชั่วโมงของรายวิชานี้เกินแผน ท-ป-น';
         }
         return null;
@@ -427,13 +427,14 @@ final class ScheduleEngine
         $lunchState = self::lunchState($policies, $level);
         $lockLunch = $lunchState === 'required';
         $normalized = array_map([self::class, 'plain'], $entries);
+        $twinHours = self::hourMap(is_array($twin['hours'] ?? null) ? $twin['hours'] : []);
         $need = 0;
         $placed = 0;
         $hours = [];
         $unplaced = [];
         foreach ($subjects as $subject) {
             $subjectNeed = self::need($subject);
-            $got = self::used($normalized, (int) $subject['id']);
+            $got = self::covered($subject, $normalized, $twinHours);
             $need += $subjectNeed;
             $placed += min($subjectNeed, $got);
             $hours[] = [
@@ -542,7 +543,7 @@ final class ScheduleEngine
         if ($pick) {
             $options = [];
             foreach ($subjects as $subject) {
-                $left = self::need($subject) - self::used($normalized, (int) $subject['id']);
+                $left = self::need($subject) - self::covered($subject, $normalized, $twinHours);
                 if ($left > 0) {
                     $options[] = [
                         'subject_id' => (int) $subject['id'],
@@ -561,7 +562,7 @@ final class ScheduleEngine
 
         $sciLeft = false;
         foreach ($subjects as $subject) {
-            if (($subject['demo_key'] ?? '') === 'sci' && self::used($normalized, (int) $subject['id']) < self::need($subject)) {
+            if (($subject['demo_key'] ?? '') === 'sci' && self::covered($subject, $normalized, $twinHours) < self::need($subject)) {
                 $sciLeft = true;
             }
         }
@@ -715,16 +716,16 @@ final class ScheduleEngine
         ];
     }
 
-    private static function greedy(array $subjects, array $entries, string $level, bool $lockLunch = true): array
+    private static function greedy(array $subjects, array $entries, string $level, bool $lockLunch = true, array $twinHours = []): array
     {
         foreach ($subjects as $subject) {
             $guard = 0;
-            while (self::used($entries, (int) $subject['id']) < self::need($subject) && $guard < 30) {
+            while (self::covered($subject, $entries, $twinHours) < self::need($subject) && $guard < 30) {
                 $guard++;
                 if (self::segmentCount($entries, (int) $subject['id']) >= 3) {
                     break;
                 }
-                $left = self::need($subject) - self::used($entries, (int) $subject['id']);
+                $left = self::need($subject) - self::covered($subject, $entries, $twinHours);
                 $placed = false;
                 foreach ([$left >= 2 ? 2 : 1, 1] as $length) {
                     if ($length < 1 || $length > $left) {
@@ -922,11 +923,31 @@ final class ScheduleEngine
         return $total;
     }
 
-    private static function remaining(array $subjects, array $entries): int
+    private static function hourMap(array $hours): array
+    {
+        $map = [];
+        foreach ($hours as $code => $count) {
+            $code = trim((string) $code);
+            if ($code === '') {
+                continue;
+            }
+            $map[$code] = max(0, (int) $count);
+        }
+        return $map;
+    }
+
+    private static function covered(array $subject, array $entries, array $twinHours): int
+    {
+        $code = trim((string) ($subject['code'] ?? ''));
+        $twin = $code === '' ? 0 : (int) ($twinHours[$code] ?? 0);
+        return self::used($entries, (int) $subject['id']) + $twin;
+    }
+
+    private static function remaining(array $subjects, array $entries, array $twinHours = []): int
     {
         $left = 0;
         foreach ($subjects as $subject) {
-            $left += max(0, self::need($subject) - self::used($entries, (int) $subject['id']));
+            $left += max(0, self::need($subject) - self::covered($subject, $entries, $twinHours));
         }
         return $left;
     }

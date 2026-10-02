@@ -344,6 +344,7 @@ function page_schedule_post(): void
     }
     $subjects = !empty($group['plan_id']) ? Repo::subjectsForPlan($schoolId, (int) $group['plan_id']) : [];
     $entries = Repo::entries($schoolId, $groupId);
+    $twinHours = Repo::twinContext($schoolId, $groupId)['hours'] ?? [];
     $lockLunch = ScheduleEngine::lunchState(Repo::policies($schoolId), (string) $group['level']) === 'required';
     try {
         if ($name === 'pick') {
@@ -361,7 +362,7 @@ function page_schedule_post(): void
             if (!is_array($pick) || (int) $pick['group_id'] !== $groupId) {
                 throw new RuntimeException('ยังไม่ได้เลือกช่องในตาราง');
             }
-            $next = ScheduleEngine::addManual($subjects, $entries, (int) $arg, (int) $pick['day'], (int) $pick['period'], (string) $group['level'], $lockLunch);
+            $next = ScheduleEngine::addManual($subjects, $entries, (int) $arg, (int) $pick['day'], (int) $pick['period'], (string) $group['level'], $lockLunch, $twinHours);
             if ($next === null) {
                 throw new RuntimeException('ลงรายวิชานี้ในช่องนี้ไม่ได้');
             }
@@ -413,7 +414,7 @@ function page_schedule_post(): void
                 throw new RuntimeException('ไม่พบคาบในตารางนี้');
             }
             $length = $name === 'resize' ? (int) $arg4 : (int) $current['length_periods'];
-            $error = ScheduleEngine::placementError($subjects, $entries, $entryId, $day, $start, $length, (string) $group['level'], $lockLunch);
+            $error = ScheduleEngine::placementError($subjects, $entries, $entryId, $day, $start, $length, (string) $group['level'], $lockLunch, $twinHours);
             if ($error !== null) {
                 throw new RuntimeException($error);
             }

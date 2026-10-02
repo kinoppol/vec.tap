@@ -641,11 +641,13 @@ final class Repo
         );
         $lessons->execute(['school_id' => $schoolId, 'school_id_2' => $schoolId, 'group_id' => $groupId]);
         $marks = [];
+        $slots = [];
         foreach ($lessons->fetchAll() as $lesson) {
             $day = (int) $lesson['day_index'];
             $start = (int) $lesson['start_period'];
             $end = min(10, $start + max(1, (int) $lesson['length_periods']) - 1);
-            $line = trim((string) $lesson['group_name'] . ' · ' . (string) $lesson['code']);
+            $code = trim((string) $lesson['code']);
+            $line = trim((string) $lesson['group_name'] . ' · ' . $code);
             for ($period = $start; $period <= $end; $period++) {
                 if ($day < 0 || $day > 4 || $period < 1) {
                     continue;
@@ -657,13 +659,20 @@ final class Repo
                 if (!in_array($line, $marks[$key], true)) {
                     $marks[$key][] = $line;
                 }
+                if ($code !== '') {
+                    $slots[$code][$key] = true;
+                }
             }
         }
         foreach ($marks as $key => $lines) {
             $text = implode("\n", $lines);
             $marks[$key] = ['label' => $text, 'title' => 'กลุ่มแฝดลงคาบนี้แล้ว: ' . str_replace("\n", ', ', $text)];
         }
-        return ['names' => array_map('strval', $names), 'marks' => $marks];
+        $hours = [];
+        foreach ($slots as $code => $keys) {
+            $hours[$code] = count($keys);
+        }
+        return ['names' => array_map('strval', $names), 'marks' => $marks, 'hours' => $hours];
     }
 
     public static function addDegreeGroup(int $schoolId, int $termId, string $name, int $studentCount): int

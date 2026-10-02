@@ -49,7 +49,7 @@
             <?php endif; ?>
         <?php endforeach; ?>
     </div></div>
-    <p class="hint"><i class="bi bi-hand-index"></i> คลิกช่องว่างเพื่อลงรายวิชา · ลากรายวิชาไปวางที่คาบเริ่ม · ลากขอบซ้ายหรือขวาเพื่อย่อขยาย<?php if (($model['twin_names'] ?? []) !== []): ?> · สีเหลืองคือคาบที่กลุ่มแฝดลงไว้แล้ว (<?= e(implode(', ', $model['twin_names'])) ?>)<?php endif; ?></p>
+    <p class="hint"><i class="bi bi-hand-index"></i> คลิกช่องว่างเพื่อลงรายวิชา · ลากรายวิชาไปวางที่คาบเริ่ม · ลากขอบซ้ายหรือขวาเพื่อย่อขยาย<?php if (($model['twin_names'] ?? []) !== []): ?> · สีเหลืองคือคาบที่กลุ่มแฝดลงไว้แล้ว (<?= e(implode(', ', $model['twin_names'])) ?>) และชั่วโมงของรหัสเดียวกันถูกหักจากชั่วโมงคงเหลือ<?php endif; ?></p>
 
     <div class="side">
         <?php if ($model['show_report']): ?>

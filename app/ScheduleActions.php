@@ -45,7 +45,8 @@ final class ScheduleActions
         $subjects = $group['plan_id'] ? Repo::subjectsForPlan($schoolId, (int) $group['plan_id']) : [];
         $policies = Repo::policies($schoolId);
         $lockLunch = ScheduleEngine::lunchState($policies, (string) $group['level']) === 'required';
-        $result = ScheduleEngine::run($subjects, Repo::entries($schoolId, $groupId), (string) $group['level'], $lockLunch);
+        $twinHours = Repo::twinContext($schoolId, $groupId)['hours'] ?? [];
+        $result = ScheduleEngine::run($subjects, Repo::entries($schoolId, $groupId), (string) $group['level'], $lockLunch, $twinHours);
         $result['entries'] = ScheduleEngine::capTeacherLoad(
             $result['entries'],
             $subjects,
@@ -60,7 +61,7 @@ final class ScheduleActions
         foreach ($subjects as $subject) {
             $subjectNeed = (int) $subject['theory'] + (int) $subject['practice'];
             $need += $subjectNeed;
-            $used = 0;
+            $used = (int) ($twinHours[(string) ($subject['code'] ?? '')] ?? 0);
             foreach ($result['entries'] as $entry) {
                 if ((int) $entry['subject_id'] === (int) $subject['id']) {
                     $used += (int) $entry['length'];
