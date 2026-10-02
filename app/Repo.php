@@ -109,7 +109,8 @@ final class Repo
         return $rows;
     }
 
-    public static function importTeacherSkillRows(int $schoolId, array $rows): int
+    /** @return array{imported: int, skipped: list<string>} */
+    public static function importTeacherSkillRows(int $schoolId, array $rows): array
     {
         if (isset($rows[0][0]) && mb_stripos((string) $rows[0][0], 'ชื่อ') !== false) {
             array_shift($rows);
@@ -122,13 +123,17 @@ final class Repo
             }
         }
         $incoming = [];
+        $skipped = [];
         foreach ($rows as $row) {
             $name = trim((string) ($row[0] ?? ''));
             if ($name === '') {
                 continue;
             }
             if (!isset($byName[$name])) {
-                throw new RuntimeException('ไม่พบครูชื่อ ' . $name);
+                if (!in_array($name, $skipped, true)) {
+                    $skipped[] = $name;
+                }
+                continue;
             }
             if (!isset($incoming[$name])) {
                 $incoming[$name] = [];
@@ -146,7 +151,7 @@ final class Repo
                 }
             }
         }
-        if ($incoming === []) {
+        if ($incoming === [] && $skipped === []) {
             throw new RuntimeException('ไฟล์ไม่มีชื่อครู');
         }
         $pdo = Database::pdo();
@@ -168,7 +173,7 @@ final class Repo
             }
             throw $exception;
         }
-        return count($incoming);
+        return ['imported' => count($incoming), 'skipped' => $skipped];
     }
 
     public static function teacher(int $schoolId, int $teacherId): ?array

@@ -1332,8 +1332,17 @@ function page_data_post(): void
             redirect('/data?tab=teachers');
         }
         try {
-            $count = Repo::importTeacherSkillRows($schoolId, uploaded_rows());
-            flash('นำเข้าทักษะของครู ' . $count . ' คนแล้ว');
+            $result = Repo::importTeacherSkillRows($schoolId, uploaded_rows());
+            $message = 'นำเข้าทักษะของครู ' . $result['imported'] . ' คนแล้ว';
+            if ($result['skipped'] !== []) {
+                $shown = array_slice($result['skipped'], 0, 8);
+                $message .= ' ข้าม ' . count($result['skipped']) . ' คนที่ไม่พบในระบบ: ' . implode(', ', $shown);
+                $more = count($result['skipped']) - count($shown);
+                if ($more > 0) {
+                    $message .= ' และอีก ' . $more . ' คน';
+                }
+            }
+            flash($message, $result['imported'] === 0 ? 'err' : 'ok');
         } catch (Throwable $exception) {
             $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'นำเข้าทักษะไม่สำเร็จ';
             flash($message, 'err');
