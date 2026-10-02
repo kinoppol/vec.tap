@@ -6,12 +6,21 @@ final class ScheduleEngine
     public const DAYS = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'];
     public const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
 
-    public static function lessonCells(array $lessons): array
+    public static function lessonCells(array $lessons, int $maxPeriod = 10): array
     {
+        $last = max(1, min(10, $maxPeriod));
+        foreach ($lessons as $lesson) {
+            $start = (int) ($lesson['start_period'] ?? 0);
+            $length = max(1, (int) ($lesson['length_periods'] ?? 1));
+            $end = $start + $length - 1;
+            if ($end > $last && $end <= 10) {
+                $last = $end;
+            }
+        }
         $grid = [];
         for ($day = 0; $day < 5; $day++) {
             $grid[$day] = [];
-            for ($period = 1; $period <= 10; $period++) {
+            for ($period = 1; $period <= $last; $period++) {
                 $grid[$day][$period] = [];
             }
         }
@@ -34,13 +43,14 @@ final class ScheduleEngine
     {
         $spans = [];
         $period = 1;
-        while ($period <= 10) {
+        $last = $periods === [] ? 10 : max(1, min(10, max(array_map('intval', array_keys($periods)))));
+        while ($period <= $last) {
             $items = $periods[$period] ?? [];
             $run = [$items];
             $span = 1;
             $key = self::printLessonKey($items);
             if ($key !== '') {
-                while ($period + $span <= 10) {
+                while ($period + $span <= $last) {
                     $next = $periods[$period + $span] ?? [];
                     if (self::printLessonKey($next) !== $key) {
                         break;
@@ -223,9 +233,10 @@ final class ScheduleEngine
         return $kept;
     }
 
-    public static function blocked(string $level, int $period, bool $lockLunch = true): bool
+    public static function blocked(string $level, int $period, bool $lockLunch = true, int $maxPeriod = 9): bool
     {
-        if ($period < 1 || $period >= 10) {
+        $maxPeriod = max(6, min(10, $maxPeriod));
+        if ($period < 1 || $period > $maxPeriod) {
             return true;
         }
         if (!$lockLunch) {
@@ -245,7 +256,7 @@ final class ScheduleEngine
         return (int) $subject['theory'] + (int) $subject['practice'];
     }
 
-    public static function run(array $subjects, array $entries, string $level, bool $lockLunch = true, array $twinHours = []): array
+    public static function run(array $subjects, array $entries, string $level, bool $lockLunch = true, array $twinHours = [], int $maxPeriod = 9): array
     {
         $kept = [];
         foreach ($entries as $entry) {
@@ -256,7 +267,7 @@ final class ScheduleEngine
         }
         $byKey = self::byKey($subjects);
         if ($byKey === []) {
-            $kept = self::greedy($subjects, $kept, $level, $lockLunch, $twinHours);
+            $kept = self::greedy($subjects, $kept, $level, $lockLunch, $twinHours, $maxPeriod);
         } else {
             foreach (self::partialPattern() as $pattern) {
                 if (!isset($byKey[$pattern['key']])) {
@@ -342,7 +353,7 @@ final class ScheduleEngine
         return ['entries' => $entries, 'phase' => 'manual', 'applied' => null, 'restore' => 'end_by_17'];
     }
 
-    public static function addManual(array $subjects, array $entries, int $subjectId, int $day, int $period, string $level, bool $lockLunch = true, array $twinHours = []): ?array
+    public static function addManual(array $subjects, array $entries, int $subjectId, int $day, int $period, string $level, bool $lockLunch = true, array $twinHours = [], int $maxPeriod = 9): ?array
     {
         $subject = null;
         foreach ($subjects as $item) {
@@ -359,7 +370,7 @@ final class ScheduleEngine
         $length = 0;
         while ($length < min($left, 3) && $length < 2) {
             $slot = $period + $length;
-            if ($slot > 10 || self::blocked($level, $slot, $lockLunch) || self::overlaps($plain, $day, $slot, 1)) {
+            if ($slot > 10 || self::blocked($level, $slot, $lockLunch, $maxPeriod) || self::overlaps($plain, $day, $slot, 1)) {
                 break;
             }
             $length++;
@@ -371,7 +382,7 @@ final class ScheduleEngine
         return $plain;
     }
 
-    public static function placementError(array $subjects, array $entries, int $entryId, int $day, int $start, int $length, string $level, bool $lockLunch = true, array $twinHours = []): ?string
+    public static function placementError(array $subjects, array $entries, int $entryId, int $day, int $start, int $length, string $level, bool $lockLunch = true, array $twinHours = [], int $maxPeriod = 9): ?string
     {
         if ($day < 0 || $day > 4 || $start < 1 || $length < 1 || $start + $length - 1 > 10) {
             return 'วางคาบนอกตารางไม่ได้';
@@ -392,7 +403,7 @@ final class ScheduleEngine
             return 'ไม่พบคาบในตารางนี้';
         }
         for ($period = $start; $period < $start + $length; $period++) {
-            if (self::blocked($level, $period, $lockLunch)) {
+            if (self::blocked($level, $period, $lockLunch, $maxPeriod)) {
                 return $lockLunch ? 'ช่องนี้เป็นเวลาพักหรือนอกเวลา' : 'ช่องนี้อยู่นอกเวลาเรียน';
             }
             if (self::overlaps($others, $day, $period, 1)) {
@@ -421,7 +432,8 @@ final class ScheduleEngine
         bool $canEdit,
         array $teachers = [],
         array $teacherLoads = [],
-        array $twin = []
+        array $twin = [],
+        int $maxPeriod = 9
     ): array {
         $level = (string) $group['level'];
         $lunchState = self::lunchState($policies, $level);
@@ -464,7 +476,7 @@ final class ScheduleEngine
         $cells = [];
         for ($day = 0; $day < 5; $day++) {
             for ($period = 1; $period <= 10; $period++) {
-                $blocked = self::blocked($level, $period, $lockLunch);
+                $blocked = self::blocked($level, $period, $lockLunch, $maxPeriod);
                 $picked = $pick && (int) $pick['day'] === $day && (int) $pick['period'] === $period;
                 $mark = $twinMarks[$day . ':' . $period] ?? null;
                 $cells[] = [
@@ -716,7 +728,7 @@ final class ScheduleEngine
         ];
     }
 
-    private static function greedy(array $subjects, array $entries, string $level, bool $lockLunch = true, array $twinHours = []): array
+    private static function greedy(array $subjects, array $entries, string $level, bool $lockLunch = true, array $twinHours = [], int $maxPeriod = 9): array
     {
         foreach ($subjects as $subject) {
             $guard = 0;
@@ -731,7 +743,7 @@ final class ScheduleEngine
                     if ($length < 1 || $length > $left) {
                         continue;
                     }
-                    $slot = self::findSlot($entries, $level, $length, $lockLunch);
+                    $slot = self::findSlot($entries, $level, $length, $lockLunch, $maxPeriod);
                     if ($slot === null) {
                         continue;
                     }
@@ -747,14 +759,14 @@ final class ScheduleEngine
         return $entries;
     }
 
-    private static function findSlot(array $entries, string $level, int $length, bool $lockLunch = true): ?array
+    private static function findSlot(array $entries, string $level, int $length, bool $lockLunch = true, int $maxPeriod = 9): ?array
     {
         for ($day = 0; $day < 5; $day++) {
             for ($period = 1; $period <= 10; $period++) {
                 $ok = true;
                 for ($offset = 0; $offset < $length; $offset++) {
                     $slot = $period + $offset;
-                    if ($slot > 10 || self::blocked($level, $slot, $lockLunch) || self::overlaps($entries, $day, $slot, 1)) {
+                    if ($slot > 10 || self::blocked($level, $slot, $lockLunch, $maxPeriod) || self::overlaps($entries, $day, $slot, 1)) {
                         $ok = false;
                         break;
                     }

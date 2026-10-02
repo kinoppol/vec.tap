@@ -59,9 +59,14 @@ $kindQuery = 'kind=' . rawurlencode($kind) . $termQuery;
             <thead>
                 <tr>
                     <th>วัน</th>
-                    <?php for ($period = 1; $period <= 10; $period++): ?>
+                    <?php
+                    $periodNos = array_keys($sheet['grid'][0] ?? []);
+                    if ($periodNos === []) {
+                        $periodNos = range(1, 9);
+                    }
+                    foreach ($periodNos as $period): ?>
                         <th>คาบ <?= $period ?><small><?= e(ScheduleEngine::TIMES[$period - 1]) ?>–<?= e(ScheduleEngine::TIMES[$period]) ?></small></th>
-                    <?php endfor; ?>
+                    <?php endforeach; ?>
                 </tr>
             </thead>
             <tbody>

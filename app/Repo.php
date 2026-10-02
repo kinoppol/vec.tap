@@ -1651,6 +1651,23 @@ final class Repo
         return (int) $statement->fetchColumn() > 0 ? $buildingId : null;
     }
 
+    public static function timetableMaxPeriod(int $schoolId): int
+    {
+        $statement = Database::pdo()->prepare('SELECT max_period FROM schools WHERE id = :id');
+        $statement->execute(['id' => $schoolId]);
+        $value = (int) $statement->fetchColumn();
+        return $value >= 6 && $value <= 10 ? $value : 9;
+    }
+
+    public static function setTimetableMaxPeriod(int $schoolId, int $period): void
+    {
+        if ($period < 6 || $period > 10) {
+            throw new RuntimeException('ชั่วโมงสูงสุดของตารางต้องอยู่ระหว่าง 6 ถึง 10 คาบ');
+        }
+        Database::pdo()->prepare('UPDATE schools SET max_period = :max_period WHERE id = :id')
+            ->execute(['max_period' => $period, 'id' => $schoolId]);
+    }
+
     public static function policies(int $schoolId): array
     {
         $statement = Database::pdo()->prepare(

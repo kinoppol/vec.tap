@@ -345,12 +345,13 @@ function page_schedule_post(): void
     $subjects = !empty($group['plan_id']) ? Repo::subjectsForPlan($schoolId, (int) $group['plan_id']) : [];
     $entries = Repo::entries($schoolId, $groupId);
     $twinHours = Repo::twinContext($schoolId, $groupId)['hours'] ?? [];
+    $maxPeriod = Repo::timetableMaxPeriod($schoolId);
     $lockLunch = ScheduleEngine::lunchState(Repo::policies($schoolId), (string) $group['level']) === 'required';
     try {
         if ($name === 'pick') {
             $day = (int) $arg;
             $period = (int) $arg2;
-            if ($day < 0 || $day > 4 || ScheduleEngine::blocked((string) $group['level'], $period, $lockLunch)) {
+            if ($day < 0 || $day > 4 || ScheduleEngine::blocked((string) $group['level'], $period, $lockLunch, $maxPeriod)) {
                 throw new RuntimeException('ช่องนี้ลงรายวิชาไม่ได้');
             }
             $_SESSION['pick'] = ['group_id' => $groupId, 'day' => $day, 'period' => $period];
@@ -362,7 +363,7 @@ function page_schedule_post(): void
             if (!is_array($pick) || (int) $pick['group_id'] !== $groupId) {
                 throw new RuntimeException('ยังไม่ได้เลือกช่องในตาราง');
             }
-            $next = ScheduleEngine::addManual($subjects, $entries, (int) $arg, (int) $pick['day'], (int) $pick['period'], (string) $group['level'], $lockLunch, $twinHours);
+            $next = ScheduleEngine::addManual($subjects, $entries, (int) $arg, (int) $pick['day'], (int) $pick['period'], (string) $group['level'], $lockLunch, $twinHours, $maxPeriod);
             if ($next === null) {
                 throw new RuntimeException('ลงรายวิชานี้ในช่องนี้ไม่ได้');
             }
@@ -414,7 +415,7 @@ function page_schedule_post(): void
                 throw new RuntimeException('ไม่พบคาบในตารางนี้');
             }
             $length = $name === 'resize' ? (int) $arg4 : (int) $current['length_periods'];
-            $error = ScheduleEngine::placementError($subjects, $entries, $entryId, $day, $start, $length, (string) $group['level'], $lockLunch, $twinHours);
+            $error = ScheduleEngine::placementError($subjects, $entries, $entryId, $day, $start, $length, (string) $group['level'], $lockLunch, $twinHours, $maxPeriod);
             if ($error !== null) {
                 throw new RuntimeException($error);
             }
@@ -590,7 +591,8 @@ function schedule_board_model(int $schoolId, array $user, array $group): array
         ScheduleActions::canSchedule($user, $schoolId, (int) $group['id']),
         $teachers,
         Repo::teachingHours($schoolId, null, (int) ($group['term_id'] ?? 0)),
-        Repo::twinContext($schoolId, (int) $group['id'])
+        Repo::twinContext($schoolId, (int) $group['id']),
+        Repo::timetableMaxPeriod($schoolId)
     );
     $model['teacher_names'] = array_map(
         static fn (array $teacher): string => (string) $teacher['name'],
@@ -637,6 +639,7 @@ function page_policies(): void
         'policies' => $schoolId > 0 ? Repo::policies($schoolId) : [],
         'canEdit' => in_array($user['role'], ['superadmin', 'school_admin'], true) && $schoolId > 0,
         'schoolName' => (string) ($school['name'] ?? ''),
+        'maxPeriod' => $schoolId > 0 ? Repo::timetableMaxPeriod($schoolId) : 9,
     ]);
 }
 
@@ -645,6 +648,20 @@ function page_policies_post(): void
     $user = Auth::requireRole(['superadmin', 'school_admin']);
     $schoolId = SchoolContext::id();
     $action = post_string('action');
+    if ($action === 'max_period') {
+        if ($schoolId <= 0) {
+            flash('เลือกสถานศึกษาก่อนตั้งชั่วโมงสูงสุดของตาราง', 'err');
+            redirect('/policies');
+        }
+        try {
+            Repo::setTimetableMaxPeriod($schoolId, (int) post_string('max_period'));
+        } catch (RuntimeException $exception) {
+            flash($exception->getMessage(), 'err');
+            redirect('/policies');
+        }
+        flash('บันทึกชั่วโมงสูงสุดของตารางแล้ว');
+        redirect('/policies');
+    }
     $policies = Repo::policies($schoolId);
     $id = (int) post_string('id');
     $index = null;
@@ -936,7 +953,7 @@ function page_print(): void
             'title' => $option['heading'] . ' ' . $option['label'],
             'note' => $option['note'],
             'lunch' => $option['lunch'],
-            'grid' => ScheduleEngine::lessonCells($mine),
+            'grid' => ScheduleEngine::lessonCells($mine, $schoolId > 0 ? Repo::timetableMaxPeriod($schoolId) : 9),
         ];
     }
     $school = $schoolId > 0 ? SchoolContext::current() : null;

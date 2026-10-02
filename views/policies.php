@@ -1,6 +1,23 @@
 <?php if (!$canEdit): ?>
     <div class="banner warn"><i class="bi bi-lock"></i> การเพิ่ม แก้ไข ลบ หรือเรียงลำดับนโยบายเป็นสิทธิ์ของผู้ดูแลระบบสถานศึกษา บทบาทของคุณดูได้อย่างเดียว</div>
 <?php endif; ?>
+<?php if ($schoolName !== '' || $maxPeriod > 0): ?>
+<form method="post" action="<?= e(url('/policies')) ?>" class="card timetable-max">
+    <?= Csrf::field() ?>
+    <input type="hidden" name="action" value="max_period">
+    <header class="card-head">
+        <strong>ชั่วโมงสูงสุดของตาราง</strong>
+        <span class="hint">คาบที่เกินค่านี้เป็นนอกเวลา ลงรายวิชาไม่ได้ ค่าเริ่มต้นคือ 9 คาบ เลิก 17:00 น.</span>
+    </header>
+    <label>คาบสุดท้ายที่ใช้ได้
+        <select name="max_period" onchange="this.form.submit()" <?= $canEdit ? '' : 'disabled' ?> aria-label="ชั่วโมงสูงสุดของตาราง">
+            <?php for ($period = 6; $period <= 10; $period++): ?>
+                <option value="<?= $period ?>" <?= $period === (int) $maxPeriod ? 'selected' : '' ?>><?= $period ?> คาบ · เลิก <?= e(ScheduleEngine::TIMES[$period]) ?> น.</option>
+            <?php endfor; ?>
+        </select>
+    </label>
+</form>
+<?php endif; ?>
 <section class="card policy-list">
     <header class="card-head">
         <strong>นโยบายของ<?= $schoolName !== '' ? ' ' . e($schoolName) : 'สถานศึกษานี้' ?></strong>

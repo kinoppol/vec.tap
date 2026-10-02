@@ -46,7 +46,8 @@ final class ScheduleActions
         $policies = Repo::policies($schoolId);
         $lockLunch = ScheduleEngine::lunchState($policies, (string) $group['level']) === 'required';
         $twinHours = Repo::twinContext($schoolId, $groupId)['hours'] ?? [];
-        $result = ScheduleEngine::run($subjects, Repo::entries($schoolId, $groupId), (string) $group['level'], $lockLunch, $twinHours);
+        $maxPeriod = Repo::timetableMaxPeriod($schoolId);
+        $result = ScheduleEngine::run($subjects, Repo::entries($schoolId, $groupId), (string) $group['level'], $lockLunch, $twinHours, $maxPeriod);
         $result['entries'] = ScheduleEngine::capTeacherLoad(
             $result['entries'],
             $subjects,
