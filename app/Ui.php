@@ -15,6 +15,15 @@ function app_shell(string $currentPage): array
     $connected = is_array($working) && ($working['last_test_status'] ?? '') === 'ok';
     $aiModels = $schoolId > 0 ? Repo::enabledModels($schoolId) : [];
     $term = $schoolId > 0 ? Repo::term($schoolId) : null;
+    if ($schoolId > 0 && in_array($currentPage, ['schedule', 'print'], true)) {
+        $pickedTerm = (int) ($_SESSION['schedule_term'][$schoolId] ?? 0);
+        foreach (Repo::terms($schoolId) as $item) {
+            if ((int) $item['id'] === $pickedTerm) {
+                $term = $item;
+                break;
+            }
+        }
+    }
 
     $item = static function (string $key, string $label, string $icon) use ($currentPage): array {
         return [

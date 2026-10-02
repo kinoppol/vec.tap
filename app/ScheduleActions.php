@@ -50,7 +50,7 @@ final class ScheduleActions
             $result['entries'],
             $subjects,
             Repo::teachers($schoolId),
-            Repo::teachingHours($schoolId, $groupId),
+            Repo::teachingHours($schoolId, $groupId, (int) $group['term_id']),
             ScheduleEngine::teacherHourModes($policies)
         );
         Repo::replaceEntries($schoolId, $groupId, $result['entries']);

@@ -35,6 +35,19 @@ final class Repo
         return $row ?: null;
     }
 
+    public static function terms(int $schoolId): array
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT t.id, t.label, t.is_current, t.start_date, t.end_date,
+                    (SELECT COUNT(*) FROM student_groups g WHERE g.term_id = t.id) AS group_count
+             FROM terms t
+             WHERE t.school_id = :school_id
+             ORDER BY t.is_current DESC, t.start_date IS NULL, t.start_date DESC, t.id DESC'
+        );
+        $statement->execute(['school_id' => $schoolId]);
+        return $statement->fetchAll();
+    }
+
     public static function teachers(int $schoolId): array
     {
         $statement = Database::pdo()->prepare('SELECT * FROM teachers WHERE school_id = :school_id AND is_active = 1 ORDER BY id');
@@ -192,16 +205,21 @@ final class Repo
         ]);
     }
 
-    public static function teachingHours(int $schoolId, ?int $exceptGroupId = null): array
+    public static function teachingHours(int $schoolId, ?int $exceptGroupId = null, ?int $termId = null): array
     {
         $sql = 'SELECT s.teacher_id, COALESCE(SUM(e.length_periods), 0) AS hours
                 FROM timetable_entries e
                 JOIN subjects s ON s.id = e.subject_id
+                JOIN student_groups g ON g.id = e.group_id
                 WHERE e.school_id = :school_id AND s.teacher_id IS NOT NULL';
         $params = ['school_id' => $schoolId];
         if ($exceptGroupId !== null) {
             $sql .= ' AND e.group_id <> :group_id';
             $params['group_id'] = $exceptGroupId;
+        }
+        if ($termId !== null && $termId > 0) {
+            $sql .= ' AND g.term_id = :term_id';
+            $params['term_id'] = $termId;
         }
         $sql .= ' GROUP BY s.teacher_id';
         $statement = Database::pdo()->prepare($sql);
@@ -414,11 +432,10 @@ final class Repo
         return $statement->fetchAll();
     }
 
-    public static function placedLessons(int $schoolId): array
+    public static function placedLessons(int $schoolId, ?int $termId = null): array
     {
-        $statement = Database::pdo()->prepare(
-            'SELECT e.day_index, e.start_period, e.length_periods,
-                    g.id AS group_id, g.name AS group_name,
+        $sql = 'SELECT e.day_index, e.start_period, e.length_periods,
+                    g.id AS group_id, g.name AS group_name, g.term_id,
                     s.code AS subject_code, s.name AS subject_name,
                     t.id AS teacher_id, t.name AS teacher_name,
                     r.id AS room_id, r.code AS room_code
@@ -427,10 +444,15 @@ final class Repo
              JOIN subjects s ON s.id = e.subject_id
              LEFT JOIN teachers t ON t.id = s.teacher_id
              LEFT JOIN rooms r ON r.id = s.room_id
-             WHERE e.school_id = :school_id
-             ORDER BY e.day_index, e.start_period, e.id'
-        );
-        $statement->execute(['school_id' => $schoolId]);
+             WHERE e.school_id = :school_id';
+        $params = ['school_id' => $schoolId];
+        if ($termId !== null && $termId > 0) {
+            $sql .= ' AND g.term_id = :term_id';
+            $params['term_id'] = $termId;
+        }
+        $sql .= ' ORDER BY e.day_index, e.start_period, e.id';
+        $statement = Database::pdo()->prepare($sql);
+        $statement->execute($params);
         return $statement->fetchAll();
     }
 

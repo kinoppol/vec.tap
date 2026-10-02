@@ -327,7 +327,8 @@ details pre { white-space: pre-wrap; background: #FDFBFD; padding: 10px; border-
 .chat-tools [data-mic].on { background: #DC3545; color: #fff; }
 .skills-split td small { color: var(--muted); }
 
-.print-tools select { border: 1px solid #E2D8E4; border-radius: 8px; padding: 8px 10px; background: #fff; max-width: 360px; }
+.term-switch { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.term-switch select, .print-tools select { border: 1px solid #E2D8E4; border-radius: 8px; padding: 8px 10px; background: #fff; max-width: 360px; font-weight: 500; }
 .print-sheet { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
 .print-sheet header h2 { margin: 0 0 4px; font-size: 18px; }
 .print-sheet header p { margin: 0 0 12px; color: var(--muted); }

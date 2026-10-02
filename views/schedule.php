@@ -1,7 +1,43 @@
+<?php
+$termId = is_array($term) ? (int) $term['id'] : 0;
+$termQuery = $termId > 0 ? 'term=' . $termId . '&' : '';
+?>
 <?php if ($groups === []): ?>
-    <div class="banner warn"><?= !empty($scheduleLimited) ? 'ยังไม่ได้รับมอบหมายให้จัดตารางกลุ่มใด ให้ผู้ดูแลสถานศึกษามอบหมายที่ข้อมูลพื้นฐาน' : 'สถานศึกษานี้ยังไม่มีกลุ่มผู้เรียน นำเข้าได้ที่ข้อมูลพื้นฐาน' ?></div>
+    <?php if ($terms !== []): ?>
+    <div class="card toolbar">
+        <form method="get" action="<?= e(url('/schedule')) ?>" class="term-switch">
+            <label>ภาคเรียน
+                <select name="term" onchange="this.form.submit()" aria-label="ภาคเรียนที่จัดตาราง">
+                    <?php foreach ($terms as $item): ?>
+                        <option value="<?= (int) $item['id'] ?>" <?= (int) $item['id'] === $termId ? 'selected' : '' ?>><?= e($item['label']) ?><?= (int) $item['is_current'] === 1 ? ' (ปัจจุบัน)' : '' ?> · <?= (int) $item['group_count'] ?> กลุ่ม</option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+        </form>
+    </div>
+    <?php endif; ?>
+    <div class="banner warn"><?php
+        if (!empty($scheduleLimited)) {
+            echo 'ยังไม่ได้รับมอบหมายให้จัดตารางกลุ่มใดในภาคเรียนนี้ ให้ผู้ดูแลสถานศึกษามอบหมายที่ข้อมูลพื้นฐาน';
+        } elseif ($termId > 0) {
+            echo 'ภาคเรียนนี้ยังไม่มีกลุ่มผู้เรียน';
+        } else {
+            echo 'สถานศึกษานี้ยังไม่มีกลุ่มผู้เรียน นำเข้าได้ที่ข้อมูลพื้นฐาน';
+        }
+    ?></div>
 <?php elseif ($model): ?>
 <div class="card toolbar">
+    <?php if ($terms !== []): ?>
+    <form method="get" action="<?= e(url('/schedule')) ?>" class="term-switch">
+        <label>ภาคเรียน
+            <select name="term" onchange="this.form.submit()" aria-label="ภาคเรียนที่จัดตาราง">
+                <?php foreach ($terms as $item): ?>
+                    <option value="<?= (int) $item['id'] ?>" <?= (int) $item['id'] === $termId ? 'selected' : '' ?>><?= e($item['label']) ?><?= (int) $item['is_current'] === 1 ? ' (ปัจจุบัน)' : '' ?> · <?= (int) $item['group_count'] ?> กลุ่ม</option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+    </form>
+    <?php endif; ?>
     <?php
     $current = $model['group'];
     $currentCode = trim((string) ($current['rms_group_code'] ?? ''));
@@ -14,7 +50,7 @@
                 $code = trim((string) ($group['rms_group_code'] ?? ''));
                 $search = trim($group['name'] . ' ' . $code);
                 ?>
-                <a href="<?= e(url('/schedule?group=' . (int) $group['id'])) ?>" data-group-id="<?= (int) $group['id'] ?>" data-search="<?= e($search) ?>" <?= (int) $group['id'] === (int) $current['id'] ? 'aria-current="true"' : '' ?>>
+                <a href="<?= e(url('/schedule?' . $termQuery . 'group=' . (int) $group['id'])) ?>" data-group-id="<?= (int) $group['id'] ?>" data-search="<?= e($search) ?>" <?= (int) $group['id'] === (int) $current['id'] ? 'aria-current="true"' : '' ?>>
                     <strong><?= e($group['name']) ?></strong>
                     <?php if ($code !== ''): ?><small><?= e($code) ?></small><?php endif; ?>
                     <em><?= (int) $group['student_count'] ?> คน</em>
@@ -30,7 +66,7 @@
         <span><i class="swatch break"></i>พัก / นอกเวลา</span>
     </div>
     <div class="spacer"></div>
-    <a class="btn" href="<?= e(url('/print?kind=group&id=' . (int) $model['group']['id'])) ?>"><i class="bi bi-printer"></i> พิมพ์ตารางเรียน</a>
+    <a class="btn" href="<?= e(url('/print?kind=group&' . $termQuery . 'id=' . (int) $model['group']['id'])) ?>"><i class="bi bi-printer"></i> พิมพ์ตารางเรียน</a>
     <form method="post" action="<?= e(url('/schedule')) ?>" class="inline">
         <?= Csrf::field() ?>
         <input type="hidden" name="group_id" value="<?= (int) $model['group']['id'] ?>">

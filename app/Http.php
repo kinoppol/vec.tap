@@ -197,11 +197,59 @@ function page_dashboard(): void
     ]);
 }
 
+function schedule_context(int $schoolId): array
+{
+    $terms = $schoolId > 0 ? Repo::terms($schoolId) : [];
+    $requested = (int) ($_GET['term'] ?? 0);
+    if ($requested <= 0) {
+        $requested = (int) ($_SESSION['schedule_term'][$schoolId] ?? 0);
+    }
+    $selected = null;
+    foreach ($terms as $term) {
+        if ((int) $term['id'] === $requested) {
+            $selected = $term;
+            break;
+        }
+    }
+    if ($selected === null) {
+        $current = null;
+        $withGroups = null;
+        foreach ($terms as $term) {
+            if ((int) $term['is_current'] === 1) {
+                $current = $term;
+            }
+            if ($withGroups === null && (int) $term['group_count'] > 0) {
+                $withGroups = $term;
+            }
+        }
+        if ($current !== null && (int) $current['group_count'] > 0) {
+            $selected = $current;
+        } elseif ($withGroups !== null) {
+            $selected = $withGroups;
+        } else {
+            $selected = $current ?? ($terms[0] ?? null);
+        }
+    }
+    if ($selected !== null) {
+        $_SESSION['schedule_term'][$schoolId] = (int) $selected['id'];
+    }
+    return ['terms' => $terms, 'term' => $selected];
+}
+
 function page_schedule(): void
 {
     $user = Auth::requireUser();
     $schoolId = SchoolContext::id();
-    $groups = $schoolId > 0 ? ScheduleActions::visibleGroups($schoolId, $user, Repo::groups($schoolId)) : [];
+    $context = schedule_context($schoolId);
+    $termId = (int) ($context['term']['id'] ?? 0);
+    $groups = $schoolId > 0 ? Repo::groups($schoolId) : [];
+    if ($termId > 0) {
+        $groups = array_values(array_filter(
+            $groups,
+            static fn (array $group): bool => (int) $group['term_id'] === $termId
+        ));
+    }
+    $groups = $schoolId > 0 ? ScheduleActions::visibleGroups($schoolId, $user, $groups) : [];
     $scheduleLimited = !ScheduleActions::seesAllGroups($user);
     $requested = (int) ($_GET['group'] ?? 0);
     $group = null;
@@ -222,12 +270,14 @@ function page_schedule(): void
     render('schedule', [
         'currentPage' => 'schedule',
         'groups' => $groups,
+        'terms' => $context['terms'],
+        'term' => $context['term'],
         'scheduleLimited' => $scheduleLimited,
         'model' => $model,
     ]);
 }
 
-function teacher_max_guard(int $schoolId, int $teacherId, int $addedHours): array
+function teacher_max_guard(int $schoolId, int $teacherId, int $addedHours, int $termId = 0): array
 {
     if ($teacherId <= 0) {
         return ['block' => null, 'warning' => null];
@@ -237,7 +287,7 @@ function teacher_max_guard(int $schoolId, int $teacherId, int $addedHours): arra
         return ['block' => null, 'warning' => null];
     }
     $modes = ScheduleEngine::teacherHourModes(Repo::policies($schoolId));
-    $next = (Repo::teachingHours($schoolId)[$teacherId] ?? 0) + $addedHours;
+    $next = (Repo::teachingHours($schoolId, null, $termId > 0 ? $termId : null)[$teacherId] ?? 0) + $addedHours;
     return [
         'block' => $addedHours > 0 ? ScheduleEngine::maxHoursBlock($teacher, $next, $modes['max']) : null,
         'warning' => ScheduleEngine::maxHoursWarning($teacher, $next, $modes['max']),
@@ -261,7 +311,9 @@ function page_schedule_post(): void
         flash('ไม่มีสิทธิ์จัดตารางกลุ่มนี้', 'err');
         redirect('/schedule');
     }
-    $back = '/schedule?group=' . $groupId;
+    $termId = (int) ($group['term_id'] ?? 0);
+    $_SESSION['schedule_term'][$schoolId] = $termId;
+    $back = '/schedule?term=' . $termId . '&group=' . $groupId;
     $action = post_string('action');
     $parts = explode(':', $action);
     $name = $parts[0] ?? '';
@@ -310,7 +362,7 @@ function page_schedule_post(): void
                     break;
                 }
             }
-            $guard = teacher_max_guard($schoolId, (int) ($subject['teacher_id'] ?? 0), (int) $created['length']);
+            $guard = teacher_max_guard($schoolId, (int) ($subject['teacher_id'] ?? 0), (int) $created['length'], $termId);
             if ($guard['block'] !== null) {
                 throw new RuntimeException($guard['block']);
             }
@@ -354,7 +406,7 @@ function page_schedule_post(): void
                 throw new RuntimeException($error);
             }
             $delta = $length - (int) $current['length_periods'];
-            $guard = teacher_max_guard($schoolId, (int) ($current['teacher_id'] ?? 0), $delta);
+            $guard = teacher_max_guard($schoolId, (int) ($current['teacher_id'] ?? 0), $delta, $termId);
             if ($guard['block'] !== null) {
                 throw new RuntimeException($guard['block']);
             }
@@ -402,7 +454,7 @@ function page_schedule_post(): void
             }
             $placed = Repo::placedHours($schoolId, $subjectId);
             if ($teacherId !== null && $teacherId !== $oldTeacher && $placed > 0) {
-                $guard = teacher_max_guard($schoolId, $teacherId, $placed);
+                $guard = teacher_max_guard($schoolId, $teacherId, $placed, $termId);
                 if ($guard['block'] !== null) {
                     throw new RuntimeException($guard['block']);
                 }
@@ -508,7 +560,7 @@ function schedule_board_model(int $schoolId, array $user, array $group): array
         $owns ? $selected : null,
         ScheduleActions::canSchedule($user, $schoolId, (int) $group['id']),
         $teachers,
-        Repo::teachingHours($schoolId)
+        Repo::teachingHours($schoolId, null, (int) ($group['term_id'] ?? 0))
     );
     $model['teacher_names'] = array_map(
         static fn (array $teacher): string => (string) $teacher['name'],
@@ -741,11 +793,20 @@ function page_print(): void
     }
     $showAll = (string) ($_GET['all'] ?? '') === '1';
     $selectedId = (int) ($_GET['id'] ?? 0);
-    $lessons = $schoolId > 0 ? Repo::placedLessons($schoolId) : [];
+    $context = schedule_context($schoolId);
+    $termId = (int) ($context['term']['id'] ?? 0);
+    $lessons = $schoolId > 0 ? Repo::placedLessons($schoolId, $termId > 0 ? $termId : null) : [];
     $policies = $schoolId > 0 ? Repo::policies($schoolId) : [];
+    $groups = $schoolId > 0 ? Repo::groups($schoolId) : [];
+    if ($termId > 0) {
+        $groups = array_values(array_filter(
+            $groups,
+            static fn (array $group): bool => (int) $group['term_id'] === $termId
+        ));
+    }
     $options = print_options(
         $kind,
-        $schoolId > 0 ? Repo::groups($schoolId) : [],
+        $groups,
         $schoolId > 0 ? Repo::teachers($schoolId) : [],
         $schoolId > 0 ? Repo::rooms($schoolId) : [],
         $lessons,
@@ -783,7 +844,6 @@ function page_print(): void
         ];
     }
     $school = $schoolId > 0 ? SchoolContext::current() : null;
-    $term = $schoolId > 0 ? Repo::term($schoolId) : null;
     render('print', [
         'currentPage' => 'print',
         'kind' => $kind,
@@ -791,8 +851,10 @@ function page_print(): void
         'selectedId' => $selectedId,
         'options' => $options,
         'sheets' => $sheets,
+        'terms' => $context['terms'],
+        'termId' => $termId,
         'schoolName' => (string) ($school['name'] ?? ''),
-        'termLabel' => (string) ($term['label'] ?? ''),
+        'termLabel' => (string) ($context['term']['label'] ?? ''),
     ]);
 }
 
