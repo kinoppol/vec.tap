@@ -206,8 +206,22 @@ if ($minMode === 'required' && $maxMode === 'required') {
             </label>
         </form>
     <?php endif; ?>
+    <?php if ($canEditPlan && $assignTermId > 0): ?>
+        <form method="post" action="<?= e(url('/data')) ?>" class="degree-add">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="action" value="add_degree_group">
+            <input type="hidden" name="term_id" value="<?= $assignTermId ?>">
+            <label>กลุ่มปริญญาตรี
+                <input name="name" required maxlength="255" placeholder="เช่น บธ.บ. 2/1" aria-label="ชื่อกลุ่มปริญญาตรี">
+            </label>
+            <label>จำนวนผู้เรียน
+                <input name="student_count" type="number" min="0" max="2000" value="0" required aria-label="จำนวนผู้เรียน">
+            </label>
+            <button class="btn btn-primary" type="submit">เพิ่มกลุ่ม</button>
+        </form>
+    <?php endif; ?>
 </div>
-<p class="hint">รายการด้านล่างเป็นกลุ่มของภาคเรียนที่เลือก มอบหมายแล้วมีผลกับกลุ่มเดียวกันในทุกภาคเรียน คนที่ได้รับมอบหมายจะเห็นเฉพาะกลุ่มของตนเองในหน้าจัดตาราง</p>
+<p class="hint">รายการด้านล่างเป็นกลุ่มของภาคเรียนที่เลือก มอบหมายแล้วมีผลกับกลุ่มเดียวกันในทุกภาคเรียน คนที่ได้รับมอบหมายจะเห็นเฉพาะกลุ่มของตนเองในหน้าจัดตาราง กลุ่มปริญญาตรีไม่มีใน RMS ผู้ดูแลสถานศึกษาเพิ่มได้เองและระบุจำนวนผู้เรียนของกลุ่มนั้น</p>
 <div class="card table-wrap">
     <table>
         <thead><tr><th>ภาคเรียน</th><th>กลุ่มผู้เรียน</th><th>ระดับ</th><th>ผู้เรียน</th><th>ครูที่ปรึกษา</th><th>ผู้จัดตาราง</th><th>ข้อสังเกตขนาดห้อง</th></tr></thead>
@@ -230,9 +244,31 @@ if ($minMode === 'required' && $maxMode === 'required') {
                             </form>
                         <?php endif; ?>
                     <?php endif; ?>
+                    <?php if ($canEditPlan && (string) $group['level'] === 'ป.ตรี' && trim((string) ($group['rms_group_code'] ?? '')) === ''): ?>
+                        <form method="post" action="<?= e(url('/data')) ?>" class="plan-create" onsubmit="return confirm('ลบกลุ่มปริญญาตรีนี้ และคาบที่ลงไว้ของกลุ่มนี้จะหายไปด้วย')">
+                            <?= Csrf::field() ?>
+                            <input type="hidden" name="action" value="delete_degree_group">
+                            <input type="hidden" name="term_id" value="<?= $assignTermId ?>">
+                            <input type="hidden" name="group_id" value="<?= (int) $group['id'] ?>">
+                            <button class="plan-link" type="submit">ลบกลุ่ม</button>
+                        </form>
+                    <?php endif; ?>
                 </td>
                 <td><?= e($group['level']) ?></td>
-                <td class="mono"><?= (int) $group['student_count'] ?> คน</td>
+                <td class="mono">
+                    <?php if ($canEditPlan && (string) $group['level'] === 'ป.ตรี' && trim((string) ($group['rms_group_code'] ?? '')) === ''): ?>
+                        <form method="post" action="<?= e(url('/data')) ?>" class="count-edit">
+                            <?= Csrf::field() ?>
+                            <input type="hidden" name="action" value="set_degree_count">
+                            <input type="hidden" name="term_id" value="<?= $assignTermId ?>">
+                            <input type="hidden" name="group_id" value="<?= (int) $group['id'] ?>">
+                            <input name="student_count" type="number" min="0" max="2000" value="<?= (int) $group['student_count'] ?>" required aria-label="จำนวนผู้เรียนของ <?= e($group['name']) ?>">
+                            <button class="btn" type="submit">บันทึก</button>
+                        </form>
+                    <?php else: ?>
+                        <?= (int) $group['student_count'] ?> คน
+                    <?php endif; ?>
+                </td>
                 <td><?= e($group['advisor_name'] ?: '—') ?></td>
                 <td>
                     <div class="tags">

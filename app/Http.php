@@ -1259,6 +1259,37 @@ function page_data_post(): void
         }
         redirect('/data?tab=teachers');
     }
+    if (in_array($action, ['add_degree_group', 'set_degree_count', 'delete_degree_group'], true)) {
+        $termId = (int) post_string('term_id');
+        $back = '/data?tab=groups' . ($termId > 0 ? '&term=' . $termId : '');
+        if (!in_array($user['role'], ['superadmin', 'school_admin'], true) || $schoolId <= 0) {
+            flash('เฉพาะผู้ดูแลสถานศึกษาเพิ่มกลุ่มปริญญาตรีได้', 'err');
+            redirect($back);
+        }
+        try {
+            $countText = post_string('student_count');
+            if ($action === 'add_degree_group') {
+                if (!preg_match('/^\d+$/', $countText)) {
+                    throw new RuntimeException('จำนวนผู้เรียนต้องเป็นจำนวนเต็ม');
+                }
+                Repo::addDegreeGroup($schoolId, $termId, post_string('name'), (int) $countText);
+                flash('เพิ่มกลุ่มปริญญาตรีแล้ว');
+            } elseif ($action === 'set_degree_count') {
+                if (!preg_match('/^\d+$/', $countText)) {
+                    throw new RuntimeException('จำนวนผู้เรียนต้องเป็นจำนวนเต็ม');
+                }
+                Repo::setDegreeGroupCount($schoolId, (int) post_string('group_id'), (int) $countText);
+                flash('บันทึกจำนวนผู้เรียนแล้ว');
+            } else {
+                Repo::deleteDegreeGroup($schoolId, (int) post_string('group_id'));
+                flash('ลบกลุ่มปริญญาตรีแล้ว');
+            }
+        } catch (Throwable $exception) {
+            $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'บันทึกกลุ่มปริญญาตรีไม่สำเร็จ';
+            flash($message, 'err');
+        }
+        redirect($back);
+    }
     if (in_array($action, ['save_plan_subject', 'delete_plan_subject', 'add_plan_subject', 'rename_plan', 'create_group_plan'], true)) {
         $planId = (int) post_string('plan_id');
         $back = '/data?tab=plans' . ($planId > 0 ? '&plan=' . $planId : '');

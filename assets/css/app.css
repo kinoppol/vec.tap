@@ -221,6 +221,13 @@ td small, td strong { display: block; }
 .tags > form { display: inline-flex; align-items: center; gap: 2px; margin: 0; }
 .tags > form span { background: none; padding: 0; }
 .tag-x { border: 0; background: transparent; color: #6E6473; cursor: pointer; padding: 0 2px; line-height: 1; font-size: 14px; }
+.degree-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 12px; }
+.degree-add input { border: 1px solid #E2D8E4; border-radius: 8px; padding: 8px 10px; background: #fff; }
+.degree-add input[name="name"] { min-width: 220px; }
+.degree-add input[name="student_count"] { width: 96px; }
+.count-edit { display: flex; gap: 6px; align-items: center; }
+.count-edit input { width: 72px; border: 1px solid #E2D8E4; border-radius: 8px; padding: 6px 8px; background: #fff; }
+.count-edit .btn { padding: 6px 10px; }
 .skill-add, .scheduler-add { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
 .skill-add input, .scheduler-add select { flex: 1; min-width: 0; border: 1px solid #E2D8E4; border-radius: 8px; padding: 6px 8px; background: #fff; }
 .skill-add .btn, .scheduler-add .btn { padding: 6px 10px; }
@@ -411,6 +418,7 @@ details pre { white-space: pre-wrap; background: #FDFBFD; padding: 10px; border-
 .print-lesson + .print-lesson { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #E2D8E4; }
 .print-lesson strong { font-family: "IBM Plex Mono", monospace; font-size: 10px; }
 .print-table td.is-lunch { background: #F6F1F7; text-align: center; color: var(--muted); }
+.print-table td.is-merged { text-align: center; vertical-align: middle; }
 .print-break { font-size: 11px; }
 
 @media print {

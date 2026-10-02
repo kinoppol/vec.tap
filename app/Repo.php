@@ -261,6 +261,69 @@ final class Repo
         return $statement->fetchAll();
     }
 
+    public static function addDegreeGroup(int $schoolId, int $termId, string $name, int $studentCount): int
+    {
+        $name = trim($name);
+        if ($name === '' || mb_strlen($name) > 255) {
+            throw new RuntimeException('ชื่อกลุ่มต้องมีอย่างน้อย 1 ตัวอักษรและไม่เกิน 255 ตัว');
+        }
+        if ($studentCount < 0 || $studentCount > 2000) {
+            throw new RuntimeException('จำนวนผู้เรียนต้องอยู่ระหว่าง 0 ถึง 2000');
+        }
+        $pdo = Database::pdo();
+        $term = $pdo->prepare('SELECT id FROM terms WHERE school_id = :school_id AND id = :id LIMIT 1');
+        $term->execute(['school_id' => $schoolId, 'id' => $termId]);
+        if (!$term->fetch()) {
+            throw new RuntimeException('ไม่พบภาคเรียนนี้ในสถานศึกษา');
+        }
+        $duplicate = $pdo->prepare(
+            'SELECT id FROM student_groups WHERE school_id = :school_id AND term_id = :term_id AND name = :name LIMIT 1'
+        );
+        $duplicate->execute(['school_id' => $schoolId, 'term_id' => $termId, 'name' => $name]);
+        if ($duplicate->fetch()) {
+            throw new RuntimeException('ภาคเรียนนี้มีกลุ่มชื่อ ' . $name . ' อยู่แล้ว');
+        }
+        $insert = $pdo->prepare(
+            'INSERT INTO student_groups (school_id, term_id, plan_id, name, level, student_count, advisor_id, rms_group_code)
+             VALUES (:school_id, :term_id, NULL, :name, :level, :student_count, NULL, NULL)'
+        );
+        $insert->execute([
+            'school_id' => $schoolId,
+            'term_id' => $termId,
+            'name' => $name,
+            'level' => 'ป.ตรี',
+            'student_count' => $studentCount,
+        ]);
+        return (int) $pdo->lastInsertId();
+    }
+
+    public static function setDegreeGroupCount(int $schoolId, int $groupId, int $studentCount): void
+    {
+        if ($studentCount < 0 || $studentCount > 2000) {
+            throw new RuntimeException('จำนวนผู้เรียนต้องอยู่ระหว่าง 0 ถึง 2000');
+        }
+        self::manualDegreeGroup($schoolId, $groupId);
+        Database::pdo()->prepare(
+            'UPDATE student_groups SET student_count = :student_count WHERE id = :id AND school_id = :school_id'
+        )->execute(['student_count' => $studentCount, 'id' => $groupId, 'school_id' => $schoolId]);
+    }
+
+    public static function deleteDegreeGroup(int $schoolId, int $groupId): void
+    {
+        self::manualDegreeGroup($schoolId, $groupId);
+        Database::pdo()->prepare('DELETE FROM student_groups WHERE id = :id AND school_id = :school_id')
+            ->execute(['id' => $groupId, 'school_id' => $schoolId]);
+    }
+
+    private static function manualDegreeGroup(int $schoolId, int $groupId): array
+    {
+        $group = self::group($schoolId, $groupId);
+        if ($group === null || (string) $group['level'] !== 'ป.ตรี' || trim((string) ($group['rms_group_code'] ?? '')) !== '') {
+            throw new RuntimeException('แก้ได้เฉพาะกลุ่มปริญญาตรีที่เพิ่มในระบบนี้');
+        }
+        return $group;
+    }
+
     public static function group(int $schoolId, int $groupId): ?array
     {
         $statement = Database::pdo()->prepare(
