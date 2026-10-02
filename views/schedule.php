@@ -30,8 +30,7 @@ $termQuery = $termId > 0 ? 'term=' . $termId . '&' : '';
     <div class="schedule-bar-main">
     <?php if ($terms !== []): ?>
     <form method="get" action="<?= e(url('/schedule')) ?>" class="term-switch">
-        <label>ภาคเรียน
-            <select name="term" onchange="this.form.submit()" aria-label="ภาคเรียนที่จัดตาราง">
+        <label>ภาคเรียน<select name="term" onchange="this.form.submit()" aria-label="ภาคเรียนที่จัดตาราง">
                 <?php foreach ($terms as $item): ?>
                     <option value="<?= (int) $item['id'] ?>" <?= (int) $item['id'] === $termId ? 'selected' : '' ?>><?= e($item['label']) ?><?= (int) $item['is_current'] === 1 ? ' (ปัจจุบัน)' : '' ?> · <?= (int) $item['group_count'] ?> กลุ่ม</option>
                 <?php endforeach; ?>
@@ -156,6 +155,18 @@ $termQuery = $termId > 0 ? 'term=' . $termId . '&' : '';
             cell.classList.add(cell.dataset.blocked === "1" ? "is-bad" : "is-target");
         }
     };
+
+    const syncHoursButton = (hours) => {
+        const button = hours.querySelector("button");
+        if (!button) return;
+        const dirty = [...hours.querySelectorAll("[data-hours-field]")].some((field) => field.value !== field.defaultValue);
+        button.classList.toggle("is-dirty", dirty);
+    };
+    board.addEventListener("input", (event) => {
+        const hours = event.target.closest("[data-hours]");
+        if (!hours || !event.target.matches("[data-hours-field]")) return;
+        syncHoursButton(hours);
+    });
 
     board.addEventListener("keydown", (event) => {
         if (event.key !== "Enter") return;
