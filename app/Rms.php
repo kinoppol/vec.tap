@@ -512,7 +512,7 @@ final class Rms
             if ($name === '') {
                 $name = $code;
             }
-            $level = self::level((string) ($row['grade'] ?? ''), $name);
+            $level = self::level((string) ($row['grade'] ?? ''), $name, $code);
             $advisor = self::teacherId($schoolId, (string) ($row['teacherIdcard'] ?? ''), trim(
                 trim((string) ($row['teacherFirstname'] ?? '')) . ' ' . trim((string) ($row['teacherLastname'] ?? ''))
             ));
@@ -1454,17 +1454,34 @@ final class Rms
         )->execute(['school_id' => $schoolId, 'school_id_2' => $schoolId]);
     }
 
-    private static function level(string $grade, string $name): string
+    private static function level(string $grade, string $name, string $code = ''): string
     {
-        $text = $grade . ' ' . $name;
-        if (str_contains($text, 'ปวช')) {
+        $base = trim((string) preg_replace('/\s*\(.*/u', '', $name));
+        if (str_starts_with($base, 'ทล.บ')) {
+            return 'ป.ตรี';
+        }
+        $digit = strlen($code) >= 3 ? $code[2] : '';
+        if ($digit === '2') {
             return 'ปวช.';
+        }
+        if ($digit === '3') {
+            return 'ปวส.';
+        }
+        if (str_starts_with($base, 'ช')) {
+            return 'ปวช.';
+        }
+        if (str_starts_with($base, 'ส')) {
+            return 'ปวส.';
+        }
+        $text = $grade . ' ' . $name;
+        if (str_contains($text, 'ปริญญา') || str_contains($text, 'ป.ตรี') || str_contains($text, 'ทล.บ')) {
+            return 'ป.ตรี';
         }
         if (str_contains($text, 'ปวส')) {
             return 'ปวส.';
         }
-        if (str_contains($text, 'ปริญญา') || str_contains($text, 'ป.ตรี')) {
-            return 'ป.ตรี';
+        if (str_contains($text, 'ปวช')) {
+            return 'ปวช.';
         }
         return trim($grade);
     }
