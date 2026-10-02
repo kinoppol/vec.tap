@@ -492,19 +492,17 @@ final class Rms
             'INSERT INTO student_groups (school_id, term_id, plan_id, name, level, student_count, advisor_id, rms_group_code)
              VALUES (:school_id, :term_id, NULL, :name, :level, 0, :advisor_id, :code)'
         );
+        $termId = self::importTermId($schoolId);
         foreach ($rows as $row) {
             if (!is_array($row)) {
                 $skipped++;
                 continue;
             }
-            $year = trim((string) ($row['academicYear'] ?? ''));
-            $semester = trim((string) ($row['semester'] ?? ''));
             $code = trim((string) ($row['groupCode'] ?? ''));
-            if ($year === '' || $semester === '' || $code === '') {
+            if ($code === '') {
                 $skipped++;
                 continue;
             }
-            $termId = self::ensureTerm($schoolId, $semester . '/' . $year);
             $name = trim((string) ($row['groupName'] ?? ''));
             if ($name === '') {
                 $name = trim((string) ($row['groupAbbr'] ?? ''));
@@ -577,19 +575,9 @@ final class Rms
         $groupName = $pdo->prepare(
             'SELECT name, level FROM student_groups WHERE school_id = :school_id AND term_id = :term_id AND rms_group_code = :code LIMIT 1'
         );
+        $termId = self::importTermId($schoolId);
         foreach ($rows as $index => $row) {
             if (!is_array($row)) {
-                $skipped++;
-                continue;
-            }
-            $year = self::field($row, ['academicYear', 'eduYear', 'edu_year', 'year', 'aca_year']);
-            $semester = self::field($row, ['semester', 'semes', 'term', 'edu_term']);
-            $combined = self::field($row, ['dateedu_eduyear', 'eduyear', 'eduYear']);
-            if ($combined !== '' && str_contains($combined, '/')) {
-                $termKey = $combined;
-            } elseif ($semester !== '' && $year !== '') {
-                $termKey = $semester . '/' . $year;
-            } else {
                 $skipped++;
                 continue;
             }
@@ -605,7 +593,6 @@ final class Rms
             $groupCode = self::field($row, ['GroupCode', 'groupCode', 'group_code', 'student_group_id', 'studentGroupId', 'groupId', 'รหัสกลุ่ม']);
             $planCode = self::field($row, ['planCode', 'plan_code', 'curiPlanCode', 'curriculumCode', 'รหัสแผน']);
             $planName = self::field($row, ['planName', 'plan_name', 'curiPlanName', 'curriculumName', 'majorName', 'majorNameTh', 'ชื่อแผน']);
-            $termId = self::ensureTerm($schoolId, $termKey);
             if ($groupCode !== '') {
                 $rmsKey = mb_substr('g:' . $groupCode, 0, 80);
                 $groupName->execute(['school_id' => $schoolId, 'term_id' => $termId, 'code' => $groupCode]);
@@ -619,7 +606,7 @@ final class Rms
             } else {
                 $rmsKey = mb_substr('p:' . ($planCode !== '' ? $planCode : $planName), 0, 80);
                 if ($planName === '') {
-                    $planName = $planCode !== '' ? 'แผน ' . $planCode : 'แผนจาก RMS ' . $termKey;
+                    $planName = $planCode !== '' ? 'แผน ' . $planCode : 'แผนจาก RMS';
                 }
             }
             $planName = mb_substr($planName, 0, 255);
@@ -1264,12 +1251,10 @@ final class Rms
 
     private static function placeMapped(int $schoolId, array $mapped): bool
     {
-        $termKey = (string) ($mapped['term_key'] ?? '');
-        $parts = explode('/', $termKey);
-        if (count($parts) !== 2) {
+        $term = self::currentTerm($schoolId);
+        if ($term === null) {
             return false;
         }
-        $termId = self::ensureTerm($schoolId, $termKey);
         $from = (string) ($mapped['time_from_name'] ?? '');
         $to = (string) ($mapped['time_to_name'] ?? '');
         $periods = null;
@@ -1279,7 +1264,7 @@ final class Rms
                 $periods = max(1, (int) round($minutes / 60));
             }
         }
-        return self::placeSchedule($schoolId, ['id' => $termId, 'rms_key' => $termKey], [
+        return self::placeSchedule($schoolId, $term, [
             'student_group_id' => (string) ($mapped['group_code'] ?? ''),
             'real_subject_id' => (string) ($mapped['subject_code'] ?? ''),
             'subject_name' => (string) ($mapped['subject_name'] ?? ''),
@@ -1405,6 +1390,15 @@ final class Rms
         $statement->execute(['school_id' => $schoolId, 'name' => $name]);
         $id = (int) $statement->fetchColumn();
         return $id > 0 ? $id : null;
+    }
+
+    private static function importTermId(int $schoolId): int
+    {
+        $term = self::currentTerm($schoolId);
+        if ($term === null) {
+            throw new RuntimeException('ยังไม่ได้ตั้งภาคเรียนปัจจุบัน ตั้งภาคเรียนก่อนโอนข้อมูล');
+        }
+        return (int) $term['id'];
     }
 
     private static function ensureTerm(int $schoolId, string $key): int
