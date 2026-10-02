@@ -311,33 +311,153 @@ if ($minMode === 'required' && $maxMode === 'required') {
 </div>
 <?php else: ?>
 <?php $planTermId = is_array($term) ? (int) $term['id'] : 0; ?>
-<?php if ($terms !== []): ?>
-<div class="card toolbar">
-    <form method="get" action="<?= e(url('/data')) ?>" class="term-switch">
-        <input type="hidden" name="tab" value="plans">
-        <label>ภาคเรียน
-            <select name="term" onchange="this.form.submit()" aria-label="ภาคเรียนของแผนการเรียน">
-                <?php foreach ($terms as $item): ?>
-                    <option value="<?= (int) $item['id'] ?>" <?= (int) $item['id'] === $planTermId ? 'selected' : '' ?>><?= e($item['label']) ?><?= (int) $item['is_current'] === 1 ? ' (ปัจจุบัน)' : '' ?></option>
-                <?php endforeach; ?>
+<?php if ($canEditPlan): ?><p class="hint">ค้นหาหรือเรียงคอลัมน์เพื่อเปิดแผนของกลุ่ม แล้วเพิ่ม ลบ หรือแก้รายวิชา แผนที่ใช้ร่วมกันหลายกลุ่มจะแก้พร้อมกัน</p><?php endif; ?>
+<div class="card table-wrap" data-datatable>
+    <div class="dt-bar">
+        <?php if ($terms !== []): ?>
+            <form method="get" action="<?= e(url('/data')) ?>" class="term-switch">
+                <input type="hidden" name="tab" value="plans">
+                <label>ภาคเรียน
+                    <select name="term" onchange="this.form.submit()" aria-label="ภาคเรียนของแผนการเรียน">
+                        <?php foreach ($terms as $item): ?>
+                            <option value="<?= (int) $item['id'] ?>" <?= (int) $item['id'] === $planTermId ? 'selected' : '' ?>><?= e($item['label']) ?><?= (int) $item['is_current'] === 1 ? ' (ปัจจุบัน)' : '' ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+            </form>
+        <?php endif; ?>
+        <label class="dt-field">แสดง
+            <select data-dt-length aria-label="จำนวนแถวต่อหน้า">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
             </select>
         </label>
-    </form>
+        <label class="dt-field dt-search">ค้นหา
+            <input type="search" data-dt-search placeholder="ชื่อแผนหรือกลุ่ม" aria-label="ค้นหาแผนการเรียน">
+        </label>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th data-dt-sort="text" class="is-sorted">แผนการเรียน</th>
+                <th data-dt-sort="number">รายวิชา</th>
+                <th data-dt-sort="number">ชม./สัปดาห์</th>
+                <th data-dt-sort="number">หน่วยกิต</th>
+                <th data-dt-sort="text">ใช้กับ</th>
+                <?php if ($canEditPlan): ?><th></th><?php endif; ?>
+            </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($plans as $plan): ?>
+            <?php $planGroups = $plan['groups'] ? implode(', ', $plan['groups']) : '—'; ?>
+            <tr data-dt-row data-search="<?= e(mb_strtolower($plan['name'] . ' ' . $planGroups . ' ' . (string) ($plan['term_label'] ?? ''))) ?>">
+                <td data-text="<?= e((string) $plan['name']) ?>"><strong><?= e($plan['name']) ?></strong></td>
+                <td data-value="<?= (int) $plan['subject_count'] ?>"><?= (int) $plan['subject_count'] ?></td>
+                <td data-value="<?= (int) $plan['hours_per_week'] ?>"><?= (int) $plan['hours_per_week'] ?></td>
+                <td data-value="<?= (int) $plan['credits'] ?>"><?= (int) $plan['credits'] ?></td>
+                <td data-text="<?= e($planGroups) ?>"><?= e($planGroups) ?></td>
+                <?php if ($canEditPlan): ?><td><a class="btn" href="<?= e(url('/data?tab=plans&plan=' . (int) $plan['id'])) ?>">แก้ไขรายวิชา</a></td><?php endif; ?>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <p class="empty" data-dt-empty <?= $plans === [] ? '' : 'hidden' ?>><?= $plans === [] ? 'ภาคเรียนนี้ยังไม่มีแผนการเรียน' : 'ไม่พบแผนที่ตรงกับคำค้น' ?></p>
+    <div class="dt-foot">
+        <span data-dt-info></span>
+        <div class="dt-pages" data-dt-pages></div>
+    </div>
 </div>
-<?php endif; ?>
-<?php if ($canEditPlan): ?><p class="hint">เลือกแผนของกลุ่มเพื่อเพิ่ม ลบ หรือแก้รายวิชา แผนที่นำเข้าจาก RMS แก้ได้จากที่นี่ หรือจากปุ่มแก้แผนในแท็บกลุ่มผู้เรียน</p><?php endif; ?>
-<div class="plan-grid">
-    <?php foreach ($plans as $plan): ?>
-        <article class="card plan">
-            <small><?= e($plan['term_label']) ?></small>
-            <strong><?= e($plan['name']) ?></strong>
-            <p><b><?= (int) $plan['subject_count'] ?></b> รายวิชา <b><?= (int) $plan['hours_per_week'] ?></b> ชม./สัปดาห์ <b><?= (int) $plan['credits'] ?></b> หน่วยกิต</p>
-            <span>ใช้กับ: <?= e($plan['groups'] ? implode(', ', $plan['groups']) : '—') ?></span>
-            <?php if ($canEditPlan): ?><a class="btn" href="<?= e(url('/data?tab=plans&plan=' . (int) $plan['id'])) ?>">แก้ไขรายวิชา</a><?php endif; ?>
-        </article>
-    <?php endforeach; ?>
-    <?php if ($plans === []): ?><p class="empty">ภาคเรียนนี้ยังไม่มีแผนการเรียน</p><?php endif; ?>
-</div>
+<script>
+(() => {
+    const root = document.querySelector("[data-datatable]");
+    if (!root) return;
+    const rows = [...root.querySelectorAll("[data-dt-row]")];
+    const tbody = root.querySelector("tbody");
+    const search = root.querySelector("[data-dt-search]");
+    const length = root.querySelector("[data-dt-length]");
+    const info = root.querySelector("[data-dt-info]");
+    const pages = root.querySelector("[data-dt-pages]");
+    const empty = root.querySelector("[data-dt-empty]");
+    const heads = [...root.querySelectorAll("th[data-dt-sort]")];
+    let sortKey = 0;
+    let sortDir = 1;
+    let page = 1;
+    const cellValue = (row, index, kind) => {
+        const cell = row.children[index];
+        if (!cell) return kind === "number" ? 0 : "";
+        if (kind === "number") return Number(cell.dataset.value || 0);
+        return cell.dataset.text || cell.textContent || "";
+    };
+    const renderPages = (pageCount) => {
+        pages.replaceChildren();
+        const add = (label, target, disabled, current) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = label;
+            button.disabled = disabled;
+            if (current) button.className = "on";
+            if (!disabled && !current) button.addEventListener("click", () => { page = target; apply(); });
+            pages.appendChild(button);
+        };
+        add("ก่อนหน้า", page - 1, page <= 1, false);
+        const marks = new Set([1, pageCount, page - 1, page, page + 1]);
+        let skipped = false;
+        for (let i = 1; i <= pageCount; i += 1) {
+            if (!marks.has(i)) {
+                if (!skipped) add("…", page, true, false);
+                skipped = true;
+                continue;
+            }
+            skipped = false;
+            add(String(i), i, false, i === page);
+        }
+        add("ถัดไป", page + 1, page >= pageCount, false);
+    };
+    const apply = () => {
+        const query = (search.value || "").trim().toLowerCase();
+        const kind = heads[sortKey]?.dataset.dtSort || "text";
+        const matched = rows.filter((row) => (row.dataset.search || "").includes(query));
+        matched.sort((a, b) => {
+            const av = cellValue(a, sortKey, kind);
+            const bv = cellValue(b, sortKey, kind);
+            if (kind === "number") return (av - bv) * sortDir;
+            return String(av).localeCompare(String(bv), "th") * sortDir;
+        });
+        const size = Math.max(1, Number(length.value) || matched.length || 1);
+        const pageCount = Math.max(1, Math.ceil(matched.length / size));
+        if (page > pageCount) page = pageCount;
+        const start = (page - 1) * size;
+        const visible = new Set(matched.slice(start, start + size));
+        matched.forEach((row) => tbody.appendChild(row));
+        rows.forEach((row) => { row.hidden = !visible.has(row); });
+        const end = Math.min(matched.length, start + size);
+        info.textContent = matched.length === 0
+            ? "ไม่พบรายการ"
+            : "แสดง " + (start + 1) + "–" + end + " จาก " + matched.length + " รายการ" + (matched.length !== rows.length ? " (กรองจาก " + rows.length + ")" : "");
+        empty.hidden = matched.length !== 0;
+        if (rows.length === 0) empty.textContent = "ภาคเรียนนี้ยังไม่มีแผนการเรียน";
+        renderPages(matched.length === 0 ? 1 : pageCount);
+        pages.hidden = matched.length === 0;
+    };
+    heads.forEach((head, index) => {
+        head.addEventListener("click", () => {
+            if (sortKey === index) sortDir *= -1;
+            else { sortKey = index; sortDir = 1; }
+            heads.forEach((item) => {
+                item.classList.toggle("is-sorted", item === head);
+                item.classList.toggle("is-desc", item === head && sortDir < 0);
+            });
+            page = 1;
+            apply();
+        });
+    });
+    search.addEventListener("input", () => { page = 1; apply(); });
+    length.addEventListener("change", () => { page = 1; apply(); });
+    apply();
+})();
+</script>
 <?php endif; ?>
 <?php elseif ($tab === 'subjects'): ?>
 <div class="card table-wrap">
