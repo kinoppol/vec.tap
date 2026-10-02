@@ -30,6 +30,82 @@ final class ScheduleEngine
         return $grid;
     }
 
+    public static function printDaySpans(array $periods): array
+    {
+        $spans = [];
+        $period = 1;
+        while ($period <= 10) {
+            $items = $periods[$period] ?? [];
+            $run = [$items];
+            $span = 1;
+            $key = self::printLessonKey($items);
+            if ($key !== '') {
+                while ($period + $span <= 10) {
+                    $next = $periods[$period + $span] ?? [];
+                    if (self::printLessonKey($next) !== $key) {
+                        break;
+                    }
+                    $run[] = $next;
+                    $span++;
+                }
+            }
+            $spans[] = [
+                'period' => $period,
+                'span' => $span,
+                'items' => self::printMergedItems($run),
+            ];
+            $period += $span;
+        }
+        return $spans;
+    }
+
+    private static function printLessonKey(array $items): string
+    {
+        if ($items === []) {
+            return '';
+        }
+        $parts = [];
+        foreach ($items as $item) {
+            $parts[] = (string) ($item['subject_code'] ?? '') . "\t"
+                . (string) ($item['subject_name'] ?? '') . "\t"
+                . (string) ($item['group_id'] ?? '');
+        }
+        $parts = array_values(array_unique($parts));
+        sort($parts);
+        return implode("\n", $parts);
+    }
+
+    private static function printMergedItems(array $run): array
+    {
+        $merged = [];
+        foreach ($run as $items) {
+            foreach ($items as $item) {
+                $key = (string) ($item['subject_code'] ?? '') . "\t"
+                    . (string) ($item['subject_name'] ?? '') . "\t"
+                    . (string) ($item['group_id'] ?? '');
+                if (!isset($merged[$key])) {
+                    $merged[$key] = $item;
+                    $merged[$key]['teacher_name'] = [];
+                    $merged[$key]['room_code'] = [];
+                }
+                $teacher = trim((string) ($item['teacher_name'] ?? ''));
+                $room = trim((string) ($item['room_code'] ?? ''));
+                if ($teacher !== '' && !in_array($teacher, $merged[$key]['teacher_name'], true)) {
+                    $merged[$key]['teacher_name'][] = $teacher;
+                }
+                if ($room !== '' && !in_array($room, $merged[$key]['room_code'], true)) {
+                    $merged[$key]['room_code'][] = $room;
+                }
+            }
+        }
+        foreach ($merged as &$item) {
+            $item['teacher_name'] = implode(', ', $item['teacher_name']);
+            $item['room_code'] = implode(', ', $item['room_code']);
+        }
+        unset($item);
+        return array_values($merged);
+    }
+
     public static function lunchState(array $policies, string $level): string
     {
         $code = ($level === 'ปวส.' || $level === 'ป.ตรี') ? 'lunch_hvc' : 'lunch_pvc';

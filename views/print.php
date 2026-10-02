@@ -68,10 +68,10 @@ $kindQuery = 'kind=' . rawurlencode($kind) . $termQuery;
             <?php foreach (ScheduleEngine::DAYS as $day => $dayName): ?>
                 <tr>
                     <th><?= e($dayName) ?></th>
-                    <?php for ($period = 1; $period <= 10; $period++): ?>
-                        <?php $items = $sheet['grid'][$day][$period]; ?>
-                        <td class="<?= $items === [] && (int) $sheet['lunch'] === $period ? 'is-lunch' : '' ?>">
-                            <?php if ($items === [] && (int) $sheet['lunch'] === $period): ?>
+                    <?php foreach (ScheduleEngine::printDaySpans($sheet['grid'][$day]) as $cell): ?>
+                        <?php $items = $cell['items']; ?>
+                        <td class="<?= $items === [] && (int) $sheet['lunch'] === (int) $cell['period'] ? 'is-lunch' : '' ?><?= (int) $cell['span'] > 1 ? ' is-merged' : '' ?>"<?= (int) $cell['span'] > 1 ? ' colspan="' . (int) $cell['span'] . '"' : '' ?>>
+                            <?php if ($items === [] && (int) $sheet['lunch'] === (int) $cell['period']): ?>
                                 <span class="print-break">พัก</span>
                             <?php endif; ?>
                             <?php foreach ($items as $item): ?>
@@ -88,7 +88,7 @@ $kindQuery = 'kind=' . rawurlencode($kind) . $termQuery;
                                 </span>
                             <?php endforeach; ?>
                         </td>
-                    <?php endfor; ?>
+                    <?php endforeach; ?>
                 </tr>
             <?php endforeach; ?>
             </tbody>
