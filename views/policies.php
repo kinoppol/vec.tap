@@ -1,17 +1,24 @@
 <?php if (!$canEdit): ?>
-    <div class="banner warn"><i class="bi bi-lock"></i> การเพิ่ม ลด หรือเรียงลำดับนโยบายเป็นสิทธิ์ของผู้ดูแลระบบสถานศึกษา บทบาทของคุณดูได้อย่างเดียว</div>
+    <div class="banner warn"><i class="bi bi-lock"></i> การเพิ่ม แก้ไข ลบ หรือเรียงลำดับนโยบายเป็นสิทธิ์ของผู้ดูแลระบบสถานศึกษา บทบาทของคุณดูได้อย่างเดียว</div>
 <?php endif; ?>
 <section class="card policy-list">
     <header class="card-head">
-        <strong>นโยบายเรียงตามลำดับความสำคัญ</strong>
-        <span class="hint">ข้อบังคับ AI ต้องปฏิบัติตาม · ข้อแนะนำ AI จะพยายามปฏิบัติตามลำดับ</span>
+        <strong>นโยบายของ<?= $schoolName !== '' ? ' ' . e($schoolName) : 'สถานศึกษานี้' ?></strong>
+        <span class="hint">ชุดนี้ใช้เฉพาะสถานศึกษาที่เลือกอยู่ · ข้อบังคับต้องปฏิบัติตาม · ข้อแนะนำพยายามปฏิบัติตามลำดับ</span>
     </header>
     <?php foreach ($policies as $index => $policy): ?>
         <form method="post" action="<?= e(url('/policies')) ?>" class="policy-row" style="opacity: <?= (int) $policy['enabled'] === 1 ? '1' : '.5' ?>">
             <?= Csrf::field() ?>
             <input type="hidden" name="id" value="<?= (int) $policy['id'] ?>">
             <span class="order"><?= $index + 1 ?></span>
-            <p><?= e($policy['body']) ?></p>
+            <?php if ($canEdit): ?>
+                <div class="policy-text">
+                    <textarea name="text" rows="2" maxlength="2000"><?= e($policy['body']) ?></textarea>
+                    <button class="btn" name="action" value="save">บันทึกข้อความ</button>
+                </div>
+            <?php else: ?>
+                <p><?= e($policy['body']) ?></p>
+            <?php endif; ?>
             <div class="seg">
                 <button name="action" value="required" <?= $canEdit ? '' : 'disabled' ?> class="<?= $policy['policy_type'] === 'required' ? 'on' : '' ?>">ข้อบังคับ</button>
                 <button name="action" value="recommended" <?= $canEdit ? '' : 'disabled' ?> class="<?= $policy['policy_type'] === 'recommended' ? 'on' : '' ?>">ข้อแนะนำ</button>

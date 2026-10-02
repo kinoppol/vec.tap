@@ -592,10 +592,12 @@ function page_policies(): void
 {
     $user = Auth::requireUser();
     $schoolId = SchoolContext::id();
+    $school = SchoolContext::current();
     render('policies', [
         'currentPage' => 'policies',
         'policies' => $schoolId > 0 ? Repo::policies($schoolId) : [],
-        'canEdit' => in_array($user['role'], ['superadmin', 'school_admin'], true),
+        'canEdit' => in_array($user['role'], ['superadmin', 'school_admin'], true) && $schoolId > 0,
+        'schoolName' => (string) ($school['name'] ?? ''),
     ]);
 }
 
@@ -634,9 +636,40 @@ function page_policies_post(): void
         ]);
         redirect('/policies');
     }
-    if ($index === null) {
+    if ($schoolId <= 0 || $index === null) {
         flash('ไม่พบนโยบายของสถานศึกษานี้', 'err');
         redirect('/policies');
+    }
+    $text = post_string('text');
+    if ($action === 'save') {
+        if ($text === '') {
+            flash('กรอกข้อความนโยบายก่อนบันทึก', 'err');
+            redirect('/policies');
+        }
+        if (mb_strlen($text) > 2000) {
+            flash('ข้อความนโยบายยาวเกิน 2,000 ตัวอักษร', 'err');
+            redirect('/policies');
+        }
+        $pdo->prepare(
+            'UPDATE policies SET body = :body, short_text = :short_text WHERE id = :id AND school_id = :school_id'
+        )->execute([
+            'body' => $text,
+            'short_text' => mb_substr($text, 0, 120),
+            'id' => $id,
+            'school_id' => $schoolId,
+        ]);
+        flash('บันทึกนโยบายของสถานศึกษานี้แล้ว');
+        redirect('/policies');
+    }
+    if ($text !== '' && mb_strlen($text) <= 2000 && $text !== (string) $policies[$index]['body']) {
+        $pdo->prepare(
+            'UPDATE policies SET body = :body, short_text = :short_text WHERE id = :id AND school_id = :school_id'
+        )->execute([
+            'body' => $text,
+            'short_text' => mb_substr($text, 0, 120),
+            'id' => $id,
+            'school_id' => $schoolId,
+        ]);
     }
     if ($action === 'required' || $action === 'recommended') {
         $pdo->prepare('UPDATE policies SET policy_type = :type WHERE id = :id AND school_id = :school_id')

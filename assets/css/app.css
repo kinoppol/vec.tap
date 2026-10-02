@@ -152,6 +152,8 @@ code, .mono { font-family: "IBM Plex Mono", monospace; }
 
 .policy-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 14px; padding: 14px 0; border-bottom: 1px solid #F4EFF5; }
 .policy-row p { margin: 0; }
+.policy-text { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.policy-text textarea { width: 100%; min-height: 64px; resize: vertical; border: 1px solid #E2D8E4; border-radius: 8px; padding: 10px 12px; font: inherit; background: #fff; }
 .order { width: 30px; height: 30px; border-radius: 8px; background: #FCE7F1; color: var(--pink-dark); display: flex; align-items: center; justify-content: center; font-family: "IBM Plex Mono", monospace; }
 .seg { display: flex; background: #F3EEF4; border-radius: 8px; padding: 3px; }
 .seg button { border: 0; background: transparent; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
