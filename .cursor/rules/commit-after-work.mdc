@@ -1,0 +1,14 @@
+---
+description: Commit and push when a requested change is finished
+alwaysApply: true
+---
+
+# Commit and push after the work is done
+
+When a requested code change is finished and the checks for it have passed, commit the relevant files and push the current branch. Do this without waiting for a separate commit or push request.
+
+- Follow the repository commit style: one or two sentences on why the change exists.
+- Do not commit secrets, temporary scripts, or unrelated files.
+- Do not push with force, and do not skip hooks.
+- If there is nothing to commit, do not create an empty commit.
+- If the user says not to commit or not to push for that task, stop.
