@@ -118,6 +118,7 @@ code, .mono { font-family: "IBM Plex Mono", monospace; }
 .swatch.ai { background: #FCE7F1; }
 .swatch.warn { background: #FFF1D6; border: 1.5px solid #E0A526; }
 .swatch.break { background: repeating-linear-gradient(135deg, #EDE6EF 0 3px, #fff 3px 6px); }
+.swatch.twin { background: #FFE566; border: 1.5px solid #E6B800; }
 .inline { display: flex; gap: 8px; }
 .schedule-layout { margin-top: 16px; }
 .timetable-card { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 12px 16px; background: transparent; border: 0; padding: 0; align-items: start; }
@@ -132,6 +133,8 @@ code, .mono { font-family: "IBM Plex Mono", monospace; }
 .cell, .block { border-radius: 7px; min-width: 0; }
 .cell { border: 1px dashed #E9E1EB; background: #fff; padding: 0; }
 .cell.is-blocked { background: repeating-linear-gradient(135deg, #EDE6EF 0 5px, #fff 5px 10px); }
+.cell.is-twin:not(.is-blocked):not(.is-picked) { background: #FFE566; border-style: solid; border-color: #E6B800; }
+.cell.is-twin small { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; padding: 4px; font-size: 10px; line-height: 1.25; text-align: left; color: #6B4A0E; pointer-events: none; white-space: pre-line; }
 .cell.is-picked { border-color: var(--pink); background: #FDF2F8; }
 .block { border: 1.5px solid transparent; text-align: left; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; z-index: 1; cursor: pointer; }
 .block em, .block strong, .block small { overflow: hidden; text-overflow: ellipsis; }
@@ -221,6 +224,11 @@ td small, td strong { display: block; }
 .tags > form { display: inline-flex; align-items: center; gap: 2px; margin: 0; }
 .tags > form span { background: none; padding: 0; }
 .tag-x { border: 0; background: transparent; color: #6E6473; cursor: pointer; padding: 0 2px; line-height: 1; font-size: 14px; }
+.twin-card { margin-bottom: 12px; }
+.twin-card h2 { margin: 0 0 6px; font-size: 16px; }
+.twin-pick { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 10px 0; }
+.twin-pick label { flex-direction: row; align-items: center; gap: 6px; }
+.twin-set { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid #F4EFF5; }
 .degree-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 12px; }
 .degree-add input { border: 1px solid #E2D8E4; border-radius: 8px; padding: 8px 10px; background: #fff; }
 .degree-add input[name="name"] { min-width: 220px; }

@@ -588,7 +588,8 @@ function schedule_board_model(int $schoolId, array $user, array $group): array
         $owns ? $selected : null,
         ScheduleActions::canSchedule($user, $schoolId, (int) $group['id']),
         $teachers,
-        Repo::teachingHours($schoolId, null, (int) ($group['term_id'] ?? 0))
+        Repo::teachingHours($schoolId, null, (int) ($group['term_id'] ?? 0)),
+        Repo::twinContext($schoolId, (int) $group['id'])
     );
     $model['teacher_names'] = array_map(
         static fn (array $teacher): string => (string) $teacher['name'],
@@ -806,6 +807,7 @@ function page_data(): void
         'teachingHours' => $schoolId > 0 ? Repo::teachingHours($schoolId) : [],
         'hourModes' => ScheduleEngine::teacherHourModes($schoolId > 0 ? Repo::policies($schoolId) : []),
         'groups' => $groups,
+        'twinSets' => $tab === 'groups' && $schoolId > 0 ? Repo::twinSets($schoolId, $termId) : [],
         'terms' => $context['terms'],
         'term' => $context['term'],
         'plans' => $plans,
@@ -1258,6 +1260,28 @@ function page_data_post(): void
             flash($message, 'err');
         }
         redirect('/data?tab=teachers');
+    }
+    if (in_array($action, ['save_twin_set', 'delete_twin_set'], true)) {
+        $termId = (int) post_string('term_id');
+        $back = '/data?tab=groups' . ($termId > 0 ? '&term=' . $termId : '');
+        if (!in_array($user['role'], ['superadmin', 'school_admin'], true) || $schoolId <= 0) {
+            flash('เฉพาะผู้ดูแลสถานศึกษาจัดกลุ่มแฝดได้', 'err');
+            redirect($back);
+        }
+        try {
+            if ($action === 'save_twin_set') {
+                $posted = $_POST['group_ids'] ?? [];
+                Repo::saveTwinSet($schoolId, $termId, is_array($posted) ? $posted : []);
+                flash('จับกลุ่มแฝดแล้ว ตอนจัดตารางคาบที่กลุ่มแฝดลงไว้จะเป็นสีเหลือง');
+            } else {
+                Repo::deleteTwinSet($schoolId, (int) post_string('twin_id'));
+                flash('เลิกจับกลุ่มแฝดแล้ว');
+            }
+        } catch (Throwable $exception) {
+            $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'บันทึกกลุ่มแฝดไม่สำเร็จ';
+            flash($message, 'err');
+        }
+        redirect($back);
     }
     if (in_array($action, ['add_degree_group', 'set_degree_count', 'delete_degree_group'], true)) {
         $termId = (int) post_string('term_id');

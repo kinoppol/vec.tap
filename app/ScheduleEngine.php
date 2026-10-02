@@ -386,7 +386,8 @@ final class ScheduleEngine
         ?int $selectedId,
         bool $canEdit,
         array $teachers = [],
-        array $teacherLoads = []
+        array $teacherLoads = [],
+        array $twin = []
     ): array {
         $level = (string) $group['level'];
         $lunchState = self::lunchState($policies, $level);
@@ -424,11 +425,13 @@ final class ScheduleEngine
             }
         }
 
+        $twinMarks = is_array($twin['marks'] ?? null) ? $twin['marks'] : [];
         $cells = [];
         for ($day = 0; $day < 5; $day++) {
             for ($period = 1; $period <= 10; $period++) {
                 $blocked = self::blocked($level, $period, $lockLunch);
                 $picked = $pick && (int) $pick['day'] === $day && (int) $pick['period'] === $period;
+                $mark = $twinMarks[$day . ':' . $period] ?? null;
                 $cells[] = [
                     'day' => $day,
                     'period' => $period,
@@ -437,6 +440,8 @@ final class ScheduleEngine
                     'blocked' => $blocked,
                     'picked' => $picked,
                     'occupied' => self::overlaps($normalized, $day, $period, 1),
+                    'twin' => is_array($mark) ? (string) ($mark['label'] ?? '') : '',
+                    'twin_title' => is_array($mark) ? (string) ($mark['title'] ?? '') : '',
                 ];
             }
         }
@@ -664,6 +669,7 @@ final class ScheduleEngine
             'show_compliance' => $phase === 'partial' || $phase === 'done',
             'compliance' => $compliance,
             'can_edit' => $canEdit,
+            'twin_names' => array_values(array_map('strval', is_array($twin['names'] ?? null) ? $twin['names'] : [])),
             'periods' => array_map(
                 static fn (int $i): array => ['no' => $i + 1, 'time' => self::TIMES[$i], 'column' => $i + 2],
                 range(0, 9)

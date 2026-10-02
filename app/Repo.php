@@ -261,6 +261,140 @@ final class Repo
         return $statement->fetchAll();
     }
 
+    public static function twinSets(int $schoolId, int $termId): array
+    {
+        if ($termId <= 0) {
+            return [];
+        }
+        $pdo = Database::pdo();
+        $sets = $pdo->prepare('SELECT id FROM group_twins WHERE school_id = :school_id AND term_id = :term_id ORDER BY id');
+        $sets->execute(['school_id' => $schoolId, 'term_id' => $termId]);
+        $members = $pdo->prepare(
+            'SELECT g.id, g.name FROM group_twin_members m
+             JOIN student_groups g ON g.id = m.group_id
+             WHERE m.twin_id = :twin_id
+             ORDER BY g.name, g.id'
+        );
+        $rows = [];
+        foreach ($sets->fetchAll() as $set) {
+            $members->execute(['twin_id' => (int) $set['id']]);
+            $rows[] = [
+                'id' => (int) $set['id'],
+                'groups' => $members->fetchAll(),
+            ];
+        }
+        return $rows;
+    }
+
+    public static function saveTwinSet(int $schoolId, int $termId, array $groupIds): int
+    {
+        $ids = [];
+        foreach ($groupIds as $groupId) {
+            $groupId = (int) $groupId;
+            if ($groupId > 0 && !in_array($groupId, $ids, true)) {
+                $ids[] = $groupId;
+            }
+        }
+        if (count($ids) < 2) {
+            throw new RuntimeException('เลือกกลุ่ม ปวส. อย่างน้อย 2 กลุ่มเพื่อจับเป็นกลุ่มแฝด');
+        }
+        $pdo = Database::pdo();
+        $group = $pdo->prepare(
+            'SELECT id, level, term_id FROM student_groups WHERE school_id = :school_id AND id = :id LIMIT 1'
+        );
+        $member = $pdo->prepare('SELECT twin_id FROM group_twin_members WHERE group_id = :group_id LIMIT 1');
+        foreach ($ids as $groupId) {
+            $group->execute(['school_id' => $schoolId, 'id' => $groupId]);
+            $row = $group->fetch();
+            if (!$row || (int) $row['term_id'] !== $termId) {
+                throw new RuntimeException('เลือกได้เฉพาะกลุ่มในภาคเรียนนี้');
+            }
+            if ((string) $row['level'] !== 'ปวส.') {
+                throw new RuntimeException('กลุ่มแฝดใช้ได้กับกลุ่มระดับ ปวส. เท่านั้น');
+            }
+            $member->execute(['group_id' => $groupId]);
+            if ($member->fetch()) {
+                throw new RuntimeException('มีกลุ่มที่ถูกจับเป็นกลุ่มแฝดอยู่แล้ว');
+            }
+        }
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('INSERT INTO group_twins (school_id, term_id) VALUES (:school_id, :term_id)')
+                ->execute(['school_id' => $schoolId, 'term_id' => $termId]);
+            $twinId = (int) $pdo->lastInsertId();
+            $insert = $pdo->prepare('INSERT INTO group_twin_members (twin_id, group_id) VALUES (:twin_id, :group_id)');
+            foreach ($ids as $groupId) {
+                $insert->execute(['twin_id' => $twinId, 'group_id' => $groupId]);
+            }
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+        return $twinId;
+    }
+
+    public static function deleteTwinSet(int $schoolId, int $twinId): void
+    {
+        $statement = Database::pdo()->prepare('DELETE FROM group_twins WHERE school_id = :school_id AND id = :id');
+        $statement->execute(['school_id' => $schoolId, 'id' => $twinId]);
+        if ($statement->rowCount() < 1) {
+            throw new RuntimeException('ไม่พบกลุ่มแฝดนี้');
+        }
+    }
+
+    public static function twinContext(int $schoolId, int $groupId): array
+    {
+        $pdo = Database::pdo();
+        $peers = $pdo->prepare(
+            'SELECT g.name
+             FROM group_twin_members mine
+             JOIN group_twin_members peer ON peer.twin_id = mine.twin_id AND peer.group_id <> mine.group_id
+             JOIN student_groups g ON g.id = peer.group_id AND g.school_id = :school_id
+             WHERE mine.group_id = :group_id
+             ORDER BY g.name, g.id'
+        );
+        $peers->execute(['school_id' => $schoolId, 'group_id' => $groupId]);
+        $names = $peers->fetchAll(PDO::FETCH_COLUMN);
+        $lessons = $pdo->prepare(
+            'SELECT g.name AS group_name, e.day_index, e.start_period, e.length_periods, s.code
+             FROM group_twin_members mine
+             JOIN group_twin_members peer ON peer.twin_id = mine.twin_id AND peer.group_id <> mine.group_id
+             JOIN student_groups g ON g.id = peer.group_id AND g.school_id = :school_id
+             JOIN timetable_entries e ON e.group_id = peer.group_id AND e.school_id = :school_id_2
+             JOIN subjects s ON s.id = e.subject_id
+             WHERE mine.group_id = :group_id
+             ORDER BY g.name, e.day_index, e.start_period, s.code'
+        );
+        $lessons->execute(['school_id' => $schoolId, 'school_id_2' => $schoolId, 'group_id' => $groupId]);
+        $marks = [];
+        foreach ($lessons->fetchAll() as $lesson) {
+            $day = (int) $lesson['day_index'];
+            $start = (int) $lesson['start_period'];
+            $end = min(10, $start + max(1, (int) $lesson['length_periods']) - 1);
+            $line = trim((string) $lesson['group_name'] . ' · ' . (string) $lesson['code']);
+            for ($period = $start; $period <= $end; $period++) {
+                if ($day < 0 || $day > 4 || $period < 1) {
+                    continue;
+                }
+                $key = $day . ':' . $period;
+                if (!isset($marks[$key])) {
+                    $marks[$key] = [];
+                }
+                if (!in_array($line, $marks[$key], true)) {
+                    $marks[$key][] = $line;
+                }
+            }
+        }
+        foreach ($marks as $key => $lines) {
+            $text = implode("\n", $lines);
+            $marks[$key] = ['label' => $text, 'title' => 'กลุ่มแฝดลงคาบนี้แล้ว: ' . str_replace("\n", ', ', $text)];
+        }
+        return ['names' => array_map('strval', $names), 'marks' => $marks];
+    }
+
     public static function addDegreeGroup(int $schoolId, int $termId, string $name, int $studentCount): int
     {
         $name = trim($name);

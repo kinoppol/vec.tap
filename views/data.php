@@ -222,6 +222,51 @@ if ($minMode === 'required' && $maxMode === 'required') {
     <?php endif; ?>
 </div>
 <p class="hint">รายการด้านล่างเป็นกลุ่มของภาคเรียนที่เลือก มอบหมายแล้วมีผลกับกลุ่มเดียวกันในทุกภาคเรียน คนที่ได้รับมอบหมายจะเห็นเฉพาะกลุ่มของตนเองในหน้าจัดตาราง กลุ่มปริญญาตรีไม่มีใน RMS ผู้ดูแลสถานศึกษาเพิ่มได้เองและระบุจำนวนผู้เรียนของกลุ่มนั้น</p>
+<?php if ($canEditPlan && $assignTermId > 0): ?>
+<?php
+$twinMemberIds = [];
+foreach ($twinSets as $set) {
+    foreach ($set['groups'] as $member) {
+        $twinMemberIds[] = (int) $member['id'];
+    }
+}
+$twinChoices = array_values(array_filter(
+    $groups,
+    static fn (array $group): bool => (string) $group['level'] === 'ปวส.' && !in_array((int) $group['id'], $twinMemberIds, true)
+));
+?>
+<div class="card twin-card">
+    <h2>กลุ่มแฝด ปวส.</h2>
+    <p class="hint">เลือกกลุ่มที่เรียนเหมือนกันเกือบทั้งหมด มีเพียงบางรายวิชาที่กลุ่มหนึ่งได้เรียนและอีกกลุ่มไม่ได้เรียน ตอนจัดตาราง คาบที่กลุ่มแฝดลงไว้แล้วจะเป็นสีเหลือง</p>
+    <?php foreach ($twinSets as $set): ?>
+        <div class="twin-set">
+            <strong><?= e(implode(' · ', array_map(static fn (array $member): string => (string) $member['name'], $set['groups']))) ?></strong>
+            <form method="post" action="<?= e(url('/data')) ?>" onsubmit="return confirm('เลิกจับกลุ่มแฝดนี้')">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="action" value="delete_twin_set">
+                <input type="hidden" name="term_id" value="<?= $assignTermId ?>">
+                <input type="hidden" name="twin_id" value="<?= (int) $set['id'] ?>">
+                <button class="btn" type="submit">เลิกจับกลุ่ม</button>
+            </form>
+        </div>
+    <?php endforeach; ?>
+    <?php if (count($twinChoices) >= 2): ?>
+        <form method="post" action="<?= e(url('/data')) ?>">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="action" value="save_twin_set">
+            <input type="hidden" name="term_id" value="<?= $assignTermId ?>">
+            <div class="twin-pick">
+                <?php foreach ($twinChoices as $choice): ?>
+                    <label><input type="checkbox" name="group_ids[]" value="<?= (int) $choice['id'] ?>"> <?= e($choice['name']) ?></label>
+                <?php endforeach; ?>
+            </div>
+            <button class="btn btn-primary" type="submit">จับเป็นกลุ่มแฝด</button>
+        </form>
+    <?php elseif ($twinSets === []): ?>
+        <p class="empty">ภาคเรียนนี้มีกลุ่ม ปวส. ไม่พอสำหรับจับกลุ่มแฝด</p>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 <div class="card table-wrap">
     <table>
         <thead><tr><th>ภาคเรียน</th><th>กลุ่มผู้เรียน</th><th>ระดับ</th><th>ผู้เรียน</th><th>ครูที่ปรึกษา</th><th>ผู้จัดตาราง</th><th>ข้อสังเกตขนาดห้อง</th></tr></thead>

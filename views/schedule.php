@@ -74,6 +74,7 @@ $termQuery = $termId > 0 ? 'term=' . $termId . '&' : '';
         <span><i class="swatch ai"></i>AI จัดให้</span>
         <span><i class="swatch warn"></i>ขัดข้อแนะนำ</span>
         <span><i class="swatch break"></i>พัก / นอกเวลา</span>
+        <?php if (($model['twin_names'] ?? []) !== []): ?><span><i class="swatch twin"></i>คาบของกลุ่มแฝด</span><?php endif; ?>
     </div>
 </div>
 <?php if (!$model['can_edit']): ?>

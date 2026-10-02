@@ -9,11 +9,12 @@
             <div class="day-head" style="grid-row: <?= $index + 2 ?>"><?= e($day) ?></div>
         <?php endforeach; ?>
         <?php foreach ($model['cells'] as $cell): ?>
-            <button class="cell <?= $cell['blocked'] ? 'is-blocked' : '' ?> <?= $cell['picked'] ? 'is-picked' : '' ?>" type="button"
+            <button class="cell <?= $cell['blocked'] ? 'is-blocked' : '' ?> <?= $cell['picked'] ? 'is-picked' : '' ?> <?= ($cell['twin'] ?? '') !== '' ? 'is-twin' : '' ?>" type="button"
                 style="grid-column: <?= (int) $cell['column'] ?>; grid-row: <?= (int) $cell['row'] ?>"
                 data-day="<?= (int) $cell['day'] ?>" data-period="<?= (int) $cell['period'] ?>" data-blocked="<?= $cell['blocked'] ? '1' : '0' ?>"
                 data-action="pick:<?= (int) $cell['day'] ?>:<?= (int) $cell['period'] ?>"
-                <?= ($cell['blocked'] || $cell['occupied'] || !$model['can_edit']) ? 'disabled' : '' ?>></button>
+                <?= ($cell['twin_title'] ?? '') !== '' ? 'title="' . e((string) $cell['twin_title']) . '"' : '' ?>
+                <?= ($cell['blocked'] || $cell['occupied'] || !$model['can_edit']) ? 'disabled' : '' ?>><?php if (($cell['twin'] ?? '') !== ''): ?><small><?= e((string) $cell['twin']) ?></small><?php endif; ?></button>
         <?php endforeach; ?>
         <?php foreach ($model['blocks'] as $block): ?>
             <?php if ($block['lunch']): ?>
@@ -44,7 +45,7 @@
             <?php endif; ?>
         <?php endforeach; ?>
     </div></div>
-    <p class="hint"><i class="bi bi-hand-index"></i> คลิกช่องว่างเพื่อลงรายวิชา · ลากรายวิชาไปวางที่คาบเริ่ม · ลากขอบซ้ายหรือขวาเพื่อย่อขยาย</p>
+    <p class="hint"><i class="bi bi-hand-index"></i> คลิกช่องว่างเพื่อลงรายวิชา · ลากรายวิชาไปวางที่คาบเริ่ม · ลากขอบซ้ายหรือขวาเพื่อย่อขยาย<?php if (($model['twin_names'] ?? []) !== []): ?> · สีเหลืองคือคาบที่กลุ่มแฝดลงไว้แล้ว (<?= e(implode(', ', $model['twin_names'])) ?>)<?php endif; ?></p>
 
     <div class="side">
         <?php if ($model['show_report']): ?>
