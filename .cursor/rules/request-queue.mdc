@@ -1,0 +1,16 @@
+---
+description: Keep unfinished user requests in a queue and finish older ones before starting a newer request
+alwaysApply: true
+---
+
+# Request queue
+
+A new user message does not replace unfinished requests. Append it to the queue and keep working oldest first.
+
+- Do not start a newly ordered task while an older requested task is still unfinished.
+- Finish the oldest unfinished request, then the next. A new request waits at the back.
+- If the user says to do the new task first, or to leave the queue for later, follow that.
+- End every reply with the queue, oldest first. If nothing is waiting, say that nothing is queued.
+- Do not drop a request because a later message arrived, and do not wait for the user to repeat it.
+
+Example: max timetable hours is unfinished, then the user asks to fold a description. Finish the hours setting first. The fold waits in the queue. Say so in the reply.
