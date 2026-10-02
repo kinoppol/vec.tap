@@ -223,24 +223,20 @@ if ($minMode === 'required' && $maxMode === 'required') {
 </div>
 <p class="hint">รายการด้านล่างเป็นกลุ่มของภาคเรียนที่เลือก มอบหมายแล้วมีผลกับกลุ่มเดียวกันในทุกภาคเรียน คนที่ได้รับมอบหมายจะเห็นเฉพาะกลุ่มของตนเองในหน้าจัดตาราง กลุ่มปริญญาตรีไม่มีใน RMS ผู้ดูแลสถานศึกษาเพิ่มได้เองและระบุจำนวนผู้เรียนของกลุ่มนั้น</p>
 <?php if ($canEditPlan && $assignTermId > 0): ?>
-<?php
-$twinMemberIds = [];
-foreach ($twinSets as $set) {
-    foreach ($set['groups'] as $member) {
-        $twinMemberIds[] = (int) $member['id'];
-    }
-}
-$twinChoices = array_values(array_filter(
-    $groups,
-    static fn (array $group): bool => (string) $group['level'] === 'ปวส.' && !in_array((int) $group['id'], $twinMemberIds, true)
-));
-?>
 <div class="card twin-card">
-    <h2>กลุ่มแฝด ปวส.</h2>
-    <p class="hint">เลือกกลุ่มที่เรียนเหมือนกันเกือบทั้งหมด มีเพียงบางรายวิชาที่กลุ่มหนึ่งได้เรียนและอีกกลุ่มไม่ได้เรียน ตอนจัดตาราง คาบที่กลุ่มแฝดลงไว้แล้วจะเป็นสีเหลือง</p>
+    <h2>กลุ่มแฝด</h2>
+    <p class="hint">แสดงเป็นคู่ที่แผนการเรียนตรงกันเกือบทั้งหมด รวมคู่ข้ามระดับอย่าง ปวช. กับ ปวส. ที่มีเพียงบางวิชาไม่เหมือนกัน ตอนจัดตารางคาบที่กลุ่มแฝดลงไว้แล้วจะเป็นสีเหลือง</p>
+    <?php if ($twinSets !== []): ?><h3>จับไว้แล้ว</h3><?php endif; ?>
     <?php foreach ($twinSets as $set): ?>
-        <div class="twin-set">
-            <strong><?= e(implode(' · ', array_map(static fn (array $member): string => (string) $member['name'], $set['groups']))) ?></strong>
+        <?php
+        $twinSummary = (string) ($set['detail'] ?? '');
+        $twinAlike = str_contains($twinSummary, 'ตรงกัน') || (preg_match('/ร่วม (\d+)/u', $twinSummary, $twinMatch) && (int) $twinMatch[1] > 0);
+        ?>
+        <div class="twin-row">
+            <div>
+                <strong><?= e(implode(' · ', array_map(static fn (array $member): string => (string) $member['name'], $set['groups']))) ?></strong>
+                <small class="<?= $twinAlike ? '' : 'tone-danger' ?>"><?= e($twinSummary !== '' ? $twinSummary : 'ไม่พบรายวิชาที่ตรงกัน') ?></small>
+            </div>
             <form method="post" action="<?= e(url('/data')) ?>" onsubmit="return confirm('เลิกจับกลุ่มแฝดนี้')">
                 <?= Csrf::field() ?>
                 <input type="hidden" name="action" value="delete_twin_set">
@@ -250,20 +246,34 @@ $twinChoices = array_values(array_filter(
             </form>
         </div>
     <?php endforeach; ?>
-    <?php if (count($twinChoices) >= 2): ?>
-        <form method="post" action="<?= e(url('/data')) ?>">
-            <?= Csrf::field() ?>
-            <input type="hidden" name="action" value="save_twin_set">
-            <input type="hidden" name="term_id" value="<?= $assignTermId ?>">
-            <div class="twin-pick">
-                <?php foreach ($twinChoices as $choice): ?>
-                    <label><input type="checkbox" name="group_ids[]" value="<?= (int) $choice['id'] ?>"> <?= e($choice['name']) ?></label>
-                <?php endforeach; ?>
+    <?php if ($twinSuggestions['pairs'] !== []): ?><h3>คู่ที่เรียนเหมือนกัน</h3><?php endif; ?>
+    <?php foreach ($twinSuggestions['pairs'] as $pair): ?>
+        <div class="twin-row">
+            <div>
+                <strong><?= e($pair['label']) ?></strong>
+                <small><?= e($pair['detail']) ?></small>
             </div>
-            <button class="btn btn-primary" type="submit">จับเป็นกลุ่มแฝด</button>
-        </form>
-    <?php elseif ($twinSets === []): ?>
-        <p class="empty">ภาคเรียนนี้มีกลุ่ม ปวส. ไม่พอสำหรับจับกลุ่มแฝด</p>
+            <form method="post" action="<?= e(url('/data')) ?>">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="action" value="save_twin_set">
+                <input type="hidden" name="term_id" value="<?= $assignTermId ?>">
+                <?php foreach ($pair['ids'] as $pairId): ?>
+                    <input type="hidden" name="group_ids[]" value="<?= (int) $pairId ?>">
+                <?php endforeach; ?>
+                <button class="btn btn-primary" type="submit">จับคู่</button>
+            </form>
+        </div>
+    <?php endforeach; ?>
+    <?php foreach ($twinSuggestions['notes'] as $note): ?>
+        <div class="twin-row">
+            <div>
+                <strong><?= e($note['label']) ?></strong>
+                <small class="tone-danger"><?= e($note['detail']) ?></small>
+            </div>
+        </div>
+    <?php endforeach; ?>
+    <?php if ($twinSets === [] && $twinSuggestions['pairs'] === [] && $twinSuggestions['notes'] === []): ?>
+        <p class="empty">ภาคเรียนนี้ยังไม่พบคู่ที่แผนการเรียนเหมือนกัน</p>
     <?php endif; ?>
 </div>
 <?php endif; ?>

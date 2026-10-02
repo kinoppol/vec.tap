@@ -808,6 +808,7 @@ function page_data(): void
         'hourModes' => ScheduleEngine::teacherHourModes($schoolId > 0 ? Repo::policies($schoolId) : []),
         'groups' => $groups,
         'twinSets' => $tab === 'groups' && $schoolId > 0 ? Repo::twinSets($schoolId, $termId) : [],
+        'twinSuggestions' => $tab === 'groups' && $schoolId > 0 ? Repo::twinSuggestions($schoolId, $termId) : ['pairs' => [], 'notes' => []],
         'terms' => $context['terms'],
         'term' => $context['term'],
         'plans' => $plans,

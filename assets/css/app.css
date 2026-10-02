@@ -226,9 +226,10 @@ td small, td strong { display: block; }
 .tag-x { border: 0; background: transparent; color: #6E6473; cursor: pointer; padding: 0 2px; line-height: 1; font-size: 14px; }
 .twin-card { margin-bottom: 12px; }
 .twin-card h2 { margin: 0 0 6px; font-size: 16px; }
-.twin-pick { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 10px 0; }
-.twin-pick label { flex-direction: row; align-items: center; gap: 6px; }
-.twin-set { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid #F4EFF5; }
+.twin-card h3 { margin: 14px 0 0; font-size: 14px; }
+.twin-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid #F4EFF5; }
+.twin-row small { display: block; color: var(--muted); font-weight: 400; }
+.twin-row small.tone-danger { color: #9B2C2C; }
 .degree-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 12px; }
 .degree-add input { border: 1px solid #E2D8E4; border-radius: 8px; padding: 8px 10px; background: #fff; }
 .degree-add input[name="name"] { min-width: 220px; }

@@ -278,9 +278,11 @@ final class Repo
         $rows = [];
         foreach ($sets->fetchAll() as $set) {
             $members->execute(['twin_id' => (int) $set['id']]);
+            $memberRows = $members->fetchAll();
             $rows[] = [
                 'id' => (int) $set['id'],
-                'groups' => $members->fetchAll(),
+                'groups' => $memberRows,
+                'detail' => self::twinSetSummary($schoolId, array_map(static fn (array $member): int => (int) $member['id'], $memberRows)),
             ];
         }
         return $rows;
@@ -296,7 +298,7 @@ final class Repo
             }
         }
         if (count($ids) < 2) {
-            throw new RuntimeException('เลือกกลุ่ม ปวส. อย่างน้อย 2 กลุ่มเพื่อจับเป็นกลุ่มแฝด');
+            throw new RuntimeException('เลือกอย่างน้อย 2 กลุ่มเพื่อจับเป็นกลุ่มแฝด');
         }
         $pdo = Database::pdo();
         $group = $pdo->prepare(
@@ -308,9 +310,6 @@ final class Repo
             $row = $group->fetch();
             if (!$row || (int) $row['term_id'] !== $termId) {
                 throw new RuntimeException('เลือกได้เฉพาะกลุ่มในภาคเรียนนี้');
-            }
-            if ((string) $row['level'] !== 'ปวส.') {
-                throw new RuntimeException('กลุ่มแฝดใช้ได้กับกลุ่มระดับ ปวส. เท่านั้น');
             }
             $member->execute(['group_id' => $groupId]);
             if ($member->fetch()) {
@@ -343,6 +342,237 @@ final class Repo
         if ($statement->rowCount() < 1) {
             throw new RuntimeException('ไม่พบกลุ่มแฝดนี้');
         }
+    }
+
+    public static function twinSuggestions(int $schoolId, int $termId): array
+    {
+        if ($termId <= 0) {
+            return ['pairs' => [], 'notes' => []];
+        }
+        $statement = Database::pdo()->prepare(
+            'SELECT g.id, g.name, s.code
+             FROM student_groups g
+             LEFT JOIN subjects s ON s.plan_id = g.plan_id AND s.school_id = g.school_id
+             WHERE g.school_id = :school_id AND g.term_id = :term_id
+             ORDER BY g.name, g.id, s.code'
+        );
+        $statement->execute(['school_id' => $schoolId, 'term_id' => $termId]);
+        $groups = [];
+        foreach ($statement->fetchAll() as $row) {
+            $id = (int) $row['id'];
+            if (!isset($groups[$id])) {
+                $groups[$id] = ['id' => $id, 'name' => (string) $row['name'], 'codes' => []];
+            }
+            $code = trim((string) ($row['code'] ?? ''));
+            if ($code !== '') {
+                $groups[$id]['codes'][$code] = true;
+            }
+        }
+        $taken = [];
+        foreach (self::twinSets($schoolId, $termId) as $set) {
+            foreach ($set['groups'] as $member) {
+                $taken[(int) $member['id']] = $set['groups'];
+            }
+        }
+        $ids = array_keys($groups);
+        $edges = [];
+        $count = count($ids);
+        for ($left = 0; $left < $count; $left++) {
+            for ($right = $left + 1; $right < $count; $right++) {
+                $edge = self::twinEdge($groups[$ids[$left]], $groups[$ids[$right]]);
+                if ($edge !== null) {
+                    $edges[] = $edge;
+                }
+            }
+        }
+        usort($edges, static function (array $left, array $right): int {
+            return $right['score'] <=> $left['score'] ?: strcmp($left['label'], $right['label']);
+        });
+        $byPair = [];
+        foreach ($edges as $edge) {
+            $byPair[$edge['a'] . ':' . $edge['b']] = $edge;
+        }
+        $owner = [];
+        $sets = [];
+        foreach ($edges as $edge) {
+            $a = $edge['a'];
+            $b = $edge['b'];
+            if (isset($taken[$a]) || isset($taken[$b])) {
+                continue;
+            }
+            $ownA = $owner[$a] ?? null;
+            $ownB = $owner[$b] ?? null;
+            if ($ownA === null && $ownB === null) {
+                $sets[] = [$a, $b];
+                $owner[$a] = $owner[$b] = count($sets) - 1;
+                continue;
+            }
+            if ($ownA !== null && $ownB === null && self::twinMatchesSet($b, $sets[$ownA], $byPair)) {
+                $sets[$ownA][] = $b;
+                $owner[$b] = $ownA;
+            } elseif ($ownB !== null && $ownA === null && self::twinMatchesSet($a, $sets[$ownB], $byPair)) {
+                $sets[$ownB][] = $a;
+                $owner[$a] = $ownB;
+            }
+        }
+        $pairs = [];
+        foreach ($sets as $memberIds) {
+            $pairs[] = [
+                'ids' => $memberIds,
+                'label' => implode(' · ', array_map(static fn (int $id): string => $groups[$id]['name'], $memberIds)),
+                'detail' => self::twinSetDetail($memberIds, $groups),
+            ];
+        }
+        $notes = [];
+        foreach ($groups as $id => $group) {
+            if (isset($taken[$id]) || isset($owner[$id])) {
+                continue;
+            }
+            $best = null;
+            foreach ($edges as $edge) {
+                if ($edge['a'] !== $id && $edge['b'] !== $id) {
+                    continue;
+                }
+                $best = $edge;
+                break;
+            }
+            if ($best === null) {
+                continue;
+            }
+            $partner = $best['a'] === $id ? $best['b'] : $best['a'];
+            $partnerSets = $taken[$partner] ?? null;
+            if ($partnerSets === null) {
+                continue;
+            }
+            $others = [];
+            foreach ($partnerSets as $member) {
+                if ((int) $member['id'] !== $partner) {
+                    $others[] = (string) $member['name'];
+                }
+            }
+            $notes[] = [
+                'label' => $groups[$id]['name'] . ' กับ ' . $groups[$partner]['name'],
+                'detail' => $best['detail'] . ' แต่ ' . $groups[$partner]['name'] . ' ถูกจับกับ ' . implode(' · ', $others) . ' อยู่แล้ว',
+            ];
+        }
+        return ['pairs' => $pairs, 'notes' => $notes];
+    }
+
+    public static function twinSetSummary(int $schoolId, array $groupIds): string
+    {
+        if ($groupIds === []) {
+            return '';
+        }
+        $statement = Database::pdo()->prepare(
+            'SELECT g.id, g.name, s.code
+             FROM student_groups g
+             LEFT JOIN subjects s ON s.plan_id = g.plan_id AND s.school_id = g.school_id
+             WHERE g.school_id = :school_id AND g.id = :id'
+        );
+        $groups = [];
+        foreach ($groupIds as $groupId) {
+            $statement->execute(['school_id' => $schoolId, 'id' => (int) $groupId]);
+            foreach ($statement->fetchAll() as $row) {
+                $id = (int) $row['id'];
+                if (!isset($groups[$id])) {
+                    $groups[$id] = ['id' => $id, 'name' => (string) $row['name'], 'codes' => []];
+                }
+                $code = trim((string) ($row['code'] ?? ''));
+                if ($code !== '') {
+                    $groups[$id]['codes'][$code] = true;
+                }
+            }
+        }
+        return self::twinSetDetail(array_map('intval', $groupIds), $groups);
+    }
+
+    private static function twinEdge(array $left, array $right): ?array
+    {
+        $codesA = array_keys($left['codes']);
+        $codesB = array_keys($right['codes']);
+        if (count($codesA) < 5 || count($codesB) < 5) {
+            return null;
+        }
+        $shared = array_intersect($codesA, $codesB);
+        $union = count(array_unique(array_merge($codesA, $codesB)));
+        $score = $union > 0 ? count($shared) / $union : 0;
+        if ($score < 0.75) {
+            return null;
+        }
+        $a = min((int) $left['id'], (int) $right['id']);
+        $b = max((int) $left['id'], (int) $right['id']);
+        $first = $a === (int) $left['id'] ? $left : $right;
+        $second = $first === $left ? $right : $left;
+        return [
+            'a' => $a,
+            'b' => $b,
+            'score' => $score,
+            'label' => $first['name'] . ' · ' . $second['name'],
+            'detail' => self::twinPairDetail($first, $second),
+        ];
+    }
+
+    private static function twinMatchesSet(int $candidate, array $memberIds, array $byPair): bool
+    {
+        foreach ($memberIds as $memberId) {
+            $a = min($candidate, $memberId);
+            $b = max($candidate, $memberId);
+            if (!isset($byPair[$a . ':' . $b])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static function twinPairDetail(array $left, array $right): string
+    {
+        $onlyLeft = array_diff(array_keys($left['codes']), array_keys($right['codes']));
+        $onlyRight = array_diff(array_keys($right['codes']), array_keys($left['codes']));
+        $shared = count(array_intersect(array_keys($left['codes']), array_keys($right['codes'])));
+        if ($onlyLeft === [] && $onlyRight === []) {
+            return 'รายวิชาตรงกันทั้ง ' . $shared . ' วิชา';
+        }
+        $parts = ['ร่วม ' . $shared . ' วิชา'];
+        if ($onlyLeft !== []) {
+            $parts[] = 'เฉพาะ ' . $left['name'] . ' อีก ' . self::twinCodeList($onlyLeft);
+        }
+        if ($onlyRight !== []) {
+            $parts[] = 'เฉพาะ ' . $right['name'] . ' อีก ' . self::twinCodeList($onlyRight);
+        }
+        return implode(' · ', $parts);
+    }
+
+    private static function twinSetDetail(array $memberIds, array $groups): string
+    {
+        $known = [];
+        foreach ($memberIds as $memberId) {
+            if (isset($groups[$memberId])) {
+                $known[] = $groups[$memberId];
+            }
+        }
+        if (count($known) < 2) {
+            return '';
+        }
+        $details = [];
+        $count = count($known);
+        for ($left = 0; $left < $count; $left++) {
+            for ($right = $left + 1; $right < $count; $right++) {
+                $details[] = self::twinPairDetail($known[$left], $known[$right]);
+            }
+        }
+        return implode(' · ', array_unique($details));
+    }
+
+    private static function twinCodeList(array $codes): string
+    {
+        $codes = array_values($codes);
+        $shown = array_slice($codes, 0, 3);
+        $text = implode(', ', $shown);
+        $more = count($codes) - count($shown);
+        if ($more > 0) {
+            $text .= ' และอีก ' . $more . ' วิชา';
+        }
+        return $text;
     }
 
     public static function twinContext(int $schoolId, int $groupId): array
