@@ -564,6 +564,9 @@ final class Rms
             'UPDATE subjects SET name = :name, theory = :theory, practice = :practice, extra = :extra
              WHERE id = :id AND school_id = :school_id'
         );
+        $renameSubject = $pdo->prepare(
+            'UPDATE subjects SET name = :name WHERE id = :id AND school_id = :school_id'
+        );
         $insertSubject = $pdo->prepare(
             'INSERT INTO subjects (school_id, plan_id, code, name, theory, practice, extra, sort_order)
              VALUES (:school_id, :plan_id, :code, :name, :theory, :practice, :extra, :sort_order)'
@@ -589,7 +592,7 @@ final class Rms
             }
             $code = mb_substr($code, 0, 32);
             $name = mb_substr($name, 0, 255);
-            [$theory, $practice, $extra] = self::subjectHours($row);
+            $hours = self::parseHours($row) ?? self::catalogHours($schoolId, $code);
             $groupCode = self::field($row, ['GroupCode', 'groupCode', 'group_code', 'student_group_id', 'studentGroupId', 'groupId', 'รหัสกลุ่ม']);
             $planCode = self::field($row, ['planCode', 'plan_code', 'curiPlanCode', 'curriculumCode', 'รหัสแผน']);
             $planName = self::field($row, ['planName', 'plan_name', 'curiPlanName', 'curriculumName', 'majorName', 'majorNameTh', 'ชื่อแผน']);
@@ -632,14 +635,18 @@ final class Rms
             $findSubject->execute(['school_id' => $schoolId, 'plan_id' => $planId, 'code' => $code]);
             $subjectId = (int) $findSubject->fetchColumn();
             if ($subjectId > 0) {
-                $updateSubject->execute([
-                    'name' => $name,
-                    'theory' => $theory,
-                    'practice' => $practice,
-                    'extra' => $extra,
-                    'id' => $subjectId,
-                    'school_id' => $schoolId,
-                ]);
+                if ($hours === null) {
+                    $renameSubject->execute(['name' => $name, 'id' => $subjectId, 'school_id' => $schoolId]);
+                } else {
+                    $updateSubject->execute([
+                        'name' => $name,
+                        'theory' => $hours[0],
+                        'practice' => $hours[1],
+                        'extra' => $hours[2],
+                        'id' => $subjectId,
+                        'school_id' => $schoolId,
+                    ]);
+                }
                 $subjectsUpdated++;
             } else {
                 $insertSubject->execute([
@@ -647,9 +654,9 @@ final class Rms
                     'plan_id' => $planId,
                     'code' => $code,
                     'name' => $name,
-                    'theory' => $theory,
-                    'practice' => $practice,
-                    'extra' => $extra,
+                    'theory' => $hours[0] ?? 0,
+                    'practice' => $hours[1] ?? 0,
+                    'extra' => $hours[2] ?? 0,
                     'sort_order' => $offset + $index,
                 ]);
                 $subjectsCreated++;
@@ -1034,8 +1041,13 @@ final class Rms
             $pdo->prepare('DELETE FROM rms_subject_catalog WHERE school_id = :school_id')->execute(['school_id' => $schoolId]);
         }
         $insert = $pdo->prepare(
-            'INSERT INTO rms_subject_catalog (school_id, code, name) VALUES (:school_id, :code, :name)
-             ON DUPLICATE KEY UPDATE name = VALUES(name)'
+            'INSERT INTO rms_subject_catalog (school_id, code, name, theory, practice, extra, hours_known)
+             VALUES (:school_id, :code, :name, :theory, :practice, :extra, :hours_known)
+             ON DUPLICATE KEY UPDATE name = VALUES(name),
+                theory = IF(VALUES(hours_known) = 1, VALUES(theory), theory),
+                practice = IF(VALUES(hours_known) = 1, VALUES(practice), practice),
+                extra = IF(VALUES(hours_known) = 1, VALUES(extra), extra),
+                hours_known = IF(VALUES(hours_known) = 1, 1, hours_known)'
         );
         $added = 0;
         $skipped = 0;
@@ -1050,10 +1062,15 @@ final class Rms
                 $skipped++;
                 continue;
             }
+            $hours = self::parseHours($row);
             $insert->execute([
                 'school_id' => $schoolId,
                 'code' => mb_substr($code, 0, 50),
                 'name' => mb_substr($name, 0, 255),
+                'theory' => $hours[0] ?? 0,
+                'practice' => $hours[1] ?? 0,
+                'extra' => $hours[2] ?? 0,
+                'hours_known' => $hours === null ? 0 : 1,
             ]);
             $added++;
         }
@@ -1134,6 +1151,12 @@ final class Rms
             }
             $insert->execute(['school_id' => $schoolId] + $mapped);
             $added++;
+            self::rememberCatalogHours(
+                $schoolId,
+                (string) $mapped['subject_code'],
+                (string) ($mapped['subject_name'] ?? ''),
+                self::parseHours($row)
+            );
             if ($mapped['class_room_extra'] === 'Y' || $mapped['time_from_name'] === null || $mapped['time_to_name'] === null) {
                 $skipped++;
                 continue;
@@ -1496,22 +1519,61 @@ final class Rms
         return '';
     }
 
-    private static function subjectHours(array $row): array
+    public static function parseHours(array $row): ?array
     {
-        $theory = self::intOrNull(self::field($row, ['theory', 'theo', 'hour_theory', 'hourT', 'theoryHour', 'credit_t', 'ท']));
-        $practice = self::intOrNull(self::field($row, ['practice', 'prac', 'hour_practice', 'hourP', 'practiceHour', 'credit_p', 'ป']));
-        $extra = self::intOrNull(self::field($row, ['extra', 'self', 'selfStudy', 'hour_self', 'hourN', 'selfHour', 'credit_n', 'น']));
-        $blob = self::field($row, ['credit', 'credits', 'unit', 'creditHour', 'tpn', 'hour', 'หน่วยกิต']);
-        if ($theory === null && $practice === null && preg_match('/(\d+)\s*[-–]\s*(\d+)\s*[-–]\s*(\d+)/u', $blob, $match)) {
-            return [(int) $match[1], (int) $match[2], (int) $match[3]];
+        $theory = self::intOrNull(self::field($row, ['theory', 'theo', 'hour_theory', 'hourT', 'theoryHour', 'credit_t', 'timeT', 'ท']));
+        $practice = self::intOrNull(self::field($row, ['practice', 'prac', 'hour_practice', 'hourP', 'practiceHour', 'credit_p', 'timeP', 'ป']));
+        $extra = self::intOrNull(self::field($row, ['extra', 'self', 'selfStudy', 'hour_self', 'hourN', 'selfHour', 'credit_n', 'timeN', 'น']));
+        if ($theory !== null || $practice !== null || $extra !== null) {
+            return [$theory ?? 0, $practice ?? 0, $extra ?? 0];
         }
-        $theory = $theory ?? 0;
-        $practice = $practice ?? 0;
-        $extra = $extra ?? 0;
-        if ($theory === 0 && $practice === 0 && $extra === 0 && preg_match('/^\d+$/', $blob)) {
-            $theory = (int) $blob;
+        foreach ($row as $key => $value) {
+            if (!is_scalar($value) || !preg_match('/credit|hour|show|tpn|unit|theory|prac|self|ท|ป|น/ui', (string) $key)) {
+                continue;
+            }
+            $text = trim((string) $value);
+            if (preg_match('/(\d+)\s*\(\s*(\d+)\s*[-–]\s*(\d+)\s*[-–]\s*(\d+)\s*\)/u', $text, $match)) {
+                return [(int) $match[2], (int) $match[3], (int) $match[4]];
+            }
+            if (preg_match('/(?<!\d)(\d+)\s*[-–]\s*(\d+)\s*[-–]\s*(\d+)(?!\d)/u', $text, $match)) {
+                return [(int) $match[1], (int) $match[2], (int) $match[3]];
+            }
         }
-        return [$theory, $practice, $extra];
+        return null;
+    }
+
+    private static function rememberCatalogHours(int $schoolId, string $code, string $name, ?array $hours): void
+    {
+        if ($hours === null || $code === '') {
+            return;
+        }
+        Database::pdo()->prepare(
+            'INSERT INTO rms_subject_catalog (school_id, code, name, theory, practice, extra, hours_known)
+             VALUES (:school_id, :code, :name, :theory, :practice, :extra, 1)
+             ON DUPLICATE KEY UPDATE
+                theory = VALUES(theory), practice = VALUES(practice), extra = VALUES(extra), hours_known = 1'
+        )->execute([
+            'school_id' => $schoolId,
+            'code' => mb_substr($code, 0, 50),
+            'name' => mb_substr($name !== '' ? $name : $code, 0, 255),
+            'theory' => $hours[0],
+            'practice' => $hours[1],
+            'extra' => $hours[2],
+        ]);
+    }
+
+    private static function catalogHours(int $schoolId, string $code): ?array
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT theory, practice, extra FROM rms_subject_catalog
+             WHERE school_id = :school_id AND code = :code AND hours_known = 1 LIMIT 1'
+        );
+        $statement->execute(['school_id' => $schoolId, 'code' => $code]);
+        $row = $statement->fetch();
+        if (!$row) {
+            return null;
+        }
+        return [(int) $row['theory'], (int) $row['practice'], (int) $row['extra']];
     }
 
     private static function textOrNull(mixed $value): ?string
