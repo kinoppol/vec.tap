@@ -244,10 +244,11 @@ final class Repo
     public static function groups(int $schoolId): array
     {
         $statement = Database::pdo()->prepare(
-            'SELECT g.*, t.name AS advisor_name, p.name AS plan_name
+            'SELECT g.*, t.name AS advisor_name, p.name AS plan_name, tm.label AS term_label
              FROM student_groups g
              LEFT JOIN teachers t ON t.id = g.advisor_id
              LEFT JOIN study_plans p ON p.id = g.plan_id
+             LEFT JOIN terms tm ON tm.id = g.term_id
              WHERE g.school_id = :school_id
              ORDER BY g.id'
         );

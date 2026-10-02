@@ -705,6 +705,15 @@ function page_data(): void
     if (!in_array($tab, ['teachers', 'groups', 'plans', 'subjects', 'rooms'], true)) {
         $tab = 'teachers';
     }
+    $context = $tab === 'groups' ? schedule_context($schoolId) : ['terms' => [], 'term' => null];
+    $termId = (int) ($context['term']['id'] ?? 0);
+    $groups = $schoolId > 0 ? Repo::groups($schoolId) : [];
+    if ($tab === 'groups' && $termId > 0) {
+        $groups = array_values(array_filter(
+            $groups,
+            static fn (array $group): bool => (int) $group['term_id'] === $termId
+        ));
+    }
     render('data', [
         'currentPage' => 'data',
         'tab' => $tab,
@@ -715,7 +724,9 @@ function page_data(): void
         'schedulers' => $schoolId > 0 ? Repo::groupSchedulers($schoolId) : [],
         'teachingHours' => $schoolId > 0 ? Repo::teachingHours($schoolId) : [],
         'hourModes' => ScheduleEngine::teacherHourModes($schoolId > 0 ? Repo::policies($schoolId) : []),
-        'groups' => $schoolId > 0 ? Repo::groups($schoolId) : [],
+        'groups' => $groups,
+        'terms' => $context['terms'],
+        'term' => $context['term'],
         'plans' => $schoolId > 0 ? Repo::plans($schoolId) : [],
         'subjects' => $schoolId > 0 ? Repo::subjects($schoolId) : [],
         'buildings' => $schoolId > 0 ? Repo::buildings($schoolId) : [],
@@ -1141,7 +1152,12 @@ function page_data_post(): void
             $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'บันทึกการมอบหมายไม่สำเร็จ';
             flash($message, 'err');
         }
-        redirect('/data?tab=groups');
+        $returnTerm = (int) post_string('term_id');
+        if ($returnTerm <= 0) {
+            $assignedGroup = Repo::group($schoolId, (int) post_string('group_id'));
+            $returnTerm = (int) ($assignedGroup['term_id'] ?? 0);
+        }
+        redirect('/data?tab=groups' . ($returnTerm > 0 ? '&term=' . $returnTerm : ''));
     }
     if ($action === 'create_teacher_user') {
         if (!in_array($user['role'], ['superadmin', 'school_admin'], true) || $schoolId <= 0) {

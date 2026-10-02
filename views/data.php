@@ -161,14 +161,30 @@ if ($minMode === 'required' && $maxMode === 'required') {
     </table>
 </div>
 <?php elseif ($tab === 'groups'): ?>
-<p class="hint">ผู้ดูแลสถานศึกษามอบหมายครูให้จัดตารางได้เฉพาะบางกลุ่ม การมอบหมายมีผลกับกลุ่มเดียวกันในทุกภาคเรียน คนที่ได้รับมอบหมายจะเห็นเฉพาะกลุ่มของตนเองในหน้าจัดตาราง ผู้ดูแลสถานศึกษาและผู้จัดตารางของงานวิชาการเห็นทุกกลุ่ม</p>
+<?php $assignTermId = is_array($term) ? (int) $term['id'] : 0; ?>
+<div class="card toolbar">
+    <?php if ($terms !== []): ?>
+        <form method="get" action="<?= e(url('/data')) ?>" class="term-switch">
+            <input type="hidden" name="tab" value="groups">
+            <label>ภาคเรียนที่มอบหมาย
+                <select name="term" onchange="this.form.submit()" aria-label="ภาคเรียนที่มอบหมายผู้จัดตาราง">
+                    <?php foreach ($terms as $item): ?>
+                        <option value="<?= (int) $item['id'] ?>" <?= (int) $item['id'] === $assignTermId ? 'selected' : '' ?>><?= e($item['label']) ?><?= (int) $item['is_current'] === 1 ? ' (ปัจจุบัน)' : '' ?> · <?= (int) $item['group_count'] ?> กลุ่ม</option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+        </form>
+    <?php endif; ?>
+</div>
+<p class="hint">รายการด้านล่างเป็นกลุ่มของภาคเรียนที่เลือก มอบหมายแล้วมีผลกับกลุ่มเดียวกันในทุกภาคเรียน คนที่ได้รับมอบหมายจะเห็นเฉพาะกลุ่มของตนเองในหน้าจัดตาราง</p>
 <div class="card table-wrap">
     <table>
-        <thead><tr><th>กลุ่มผู้เรียน</th><th>ระดับ</th><th>ผู้เรียน</th><th>ครูที่ปรึกษา</th><th>ผู้จัดตาราง</th><th>ข้อสังเกตขนาดห้อง</th></tr></thead>
+        <thead><tr><th>ภาคเรียน</th><th>กลุ่มผู้เรียน</th><th>ระดับ</th><th>ผู้เรียน</th><th>ครูที่ปรึกษา</th><th>ผู้จัดตาราง</th><th>ข้อสังเกตขนาดห้อง</th></tr></thead>
         <tbody>
         <?php foreach ($groups as $group): ?>
             <?php $assigned = $schedulers[(int) $group['id']] ?? []; ?>
             <tr>
+                <td><?= e((string) ($group['term_label'] ?? '')) ?></td>
                 <td><strong><?= e($group['name']) ?></strong></td>
                 <td><?= e($group['level']) ?></td>
                 <td class="mono"><?= (int) $group['student_count'] ?> คน</td>
@@ -180,6 +196,7 @@ if ($minMode === 'required' && $maxMode === 'required') {
                                 <form method="post" action="<?= e(url('/data')) ?>">
                                     <?= Csrf::field() ?>
                                     <input type="hidden" name="action" value="remove_scheduler">
+                                    <input type="hidden" name="term_id" value="<?= $assignTermId ?>">
                                     <input type="hidden" name="group_id" value="<?= (int) $group['id'] ?>">
                                     <input type="hidden" name="teacher_id" value="<?= (int) $scheduler['teacher_id'] ?>">
                                     <span><?= e($scheduler['name']) ?></span>
@@ -194,6 +211,7 @@ if ($minMode === 'required' && $maxMode === 'required') {
                         <form method="post" action="<?= e(url('/data')) ?>" class="scheduler-add">
                             <?= Csrf::field() ?>
                             <input type="hidden" name="action" value="assign_scheduler">
+                            <input type="hidden" name="term_id" value="<?= $assignTermId ?>">
                             <input type="hidden" name="group_id" value="<?= (int) $group['id'] ?>">
                             <select name="teacher_id" required>
                                 <option value="">เลือกครู</option>
@@ -210,7 +228,7 @@ if ($minMode === 'required' && $maxMode === 'required') {
                 <td class="tone-<?= e((string) $group['note_tone']) ?>"><?= e($group['note'] ?: '—') ?></td>
             </tr>
         <?php endforeach; ?>
-        <?php if ($groups === []): ?><tr><td colspan="6" class="empty">ยังไม่มีกลุ่มผู้เรียน</td></tr><?php endif; ?>
+        <?php if ($groups === []): ?><tr><td colspan="7" class="empty">ภาคเรียนนี้ยังไม่มีกลุ่มผู้เรียน</td></tr><?php endif; ?>
         </tbody>
     </table>
 </div>
