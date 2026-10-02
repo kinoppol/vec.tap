@@ -227,9 +227,15 @@ td small, td strong { display: block; }
 .twin-card { margin-bottom: 12px; }
 .twin-card h2 { margin: 0 0 6px; font-size: 16px; }
 .twin-card h3 { margin: 14px 0 0; font-size: 14px; }
-.twin-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid #F4EFF5; }
+.twin-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(180px, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid #F4EFF5; }
+.twin-row.is-warn { background: #FFF6E0; border: 1px solid #E6C36A; border-radius: 10px; padding: 10px; margin-top: 8px; }
 .twin-row small { display: block; color: var(--muted); font-weight: 400; }
-.twin-row small.tone-danger { color: #9B2C2C; }
+.twin-row small.tone-danger, .twin-row .tone-danger { color: #9B2C2C; }
+.twin-sides { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.twin-side { min-width: 160px; background: #fff; border: 1px solid #E2D8E4; border-radius: 8px; padding: 8px 10px; }
+.twin-side small { color: var(--muted); }
+.twin-join { color: var(--muted); font-size: 12px; font-weight: 600; }
+.twin-card .banner { margin-top: 10px; }
 .degree-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 12px; }
 .degree-add input { border: 1px solid #E2D8E4; border-radius: 8px; padding: 8px 10px; background: #fff; }
 .degree-add input[name="name"] { min-width: 220px; }

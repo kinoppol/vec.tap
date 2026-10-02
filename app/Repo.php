@@ -270,7 +270,7 @@ final class Repo
         $sets = $pdo->prepare('SELECT id FROM group_twins WHERE school_id = :school_id AND term_id = :term_id ORDER BY id');
         $sets->execute(['school_id' => $schoolId, 'term_id' => $termId]);
         $members = $pdo->prepare(
-            'SELECT g.id, g.name FROM group_twin_members m
+            'SELECT g.id, g.name, g.level FROM group_twin_members m
              JOIN student_groups g ON g.id = m.group_id
              WHERE m.twin_id = :twin_id
              ORDER BY g.name, g.id'
@@ -279,10 +279,12 @@ final class Repo
         foreach ($sets->fetchAll() as $set) {
             $members->execute(['twin_id' => (int) $set['id']]);
             $memberRows = $members->fetchAll();
+            $report = self::twinReport($schoolId, array_map(static fn (array $member): int => (int) $member['id'], $memberRows));
             $rows[] = [
                 'id' => (int) $set['id'],
                 'groups' => $memberRows,
-                'detail' => self::twinSetSummary($schoolId, array_map(static fn (array $member): int => (int) $member['id'], $memberRows)),
+                'detail' => $report['detail'],
+                'alike' => $report['alike'],
             ];
         }
         return $rows;
@@ -350,7 +352,7 @@ final class Repo
             return ['pairs' => [], 'notes' => []];
         }
         $statement = Database::pdo()->prepare(
-            'SELECT g.id, g.name, s.code
+            'SELECT g.id, g.name, g.level, s.code
              FROM student_groups g
              LEFT JOIN subjects s ON s.plan_id = g.plan_id AND s.school_id = g.school_id
              WHERE g.school_id = :school_id AND g.term_id = :term_id
@@ -361,7 +363,7 @@ final class Repo
         foreach ($statement->fetchAll() as $row) {
             $id = (int) $row['id'];
             if (!isset($groups[$id])) {
-                $groups[$id] = ['id' => $id, 'name' => (string) $row['name'], 'codes' => []];
+                $groups[$id] = ['id' => $id, 'name' => (string) $row['name'], 'level' => (string) ($row['level'] ?? ''), 'codes' => []];
             }
             $code = trim((string) ($row['code'] ?? ''));
             if ($code !== '') {
@@ -417,10 +419,17 @@ final class Repo
         }
         $pairs = [];
         foreach ($sets as $memberIds) {
+            $report = self::twinSetReport($memberIds, $groups);
             $pairs[] = [
                 'ids' => $memberIds,
+                'groups' => array_map(static fn (int $id): array => [
+                    'id' => $id,
+                    'name' => $groups[$id]['name'],
+                    'level' => $groups[$id]['level'],
+                ], $memberIds),
                 'label' => implode(' · ', array_map(static fn (int $id): string => $groups[$id]['name'], $memberIds)),
-                'detail' => self::twinSetDetail($memberIds, $groups),
+                'detail' => $report['detail'],
+                'alike' => $report['alike'],
             ];
         }
         $notes = [];
@@ -483,7 +492,35 @@ final class Repo
                 }
             }
         }
-        return self::twinSetDetail(array_map('intval', $groupIds), $groups);
+        return self::twinSetReport(array_map('intval', $groupIds), $groups)['detail'];
+    }
+
+    public static function twinReport(int $schoolId, array $groupIds): array
+    {
+        if ($groupIds === []) {
+            return ['detail' => '', 'alike' => false];
+        }
+        $statement = Database::pdo()->prepare(
+            'SELECT g.id, g.name, g.level, s.code
+             FROM student_groups g
+             LEFT JOIN subjects s ON s.plan_id = g.plan_id AND s.school_id = g.school_id
+             WHERE g.school_id = :school_id AND g.id = :id'
+        );
+        $groups = [];
+        foreach ($groupIds as $groupId) {
+            $statement->execute(['school_id' => $schoolId, 'id' => (int) $groupId]);
+            foreach ($statement->fetchAll() as $row) {
+                $id = (int) $row['id'];
+                if (!isset($groups[$id])) {
+                    $groups[$id] = ['id' => $id, 'name' => (string) $row['name'], 'level' => (string) $row['level'], 'codes' => []];
+                }
+                $code = trim((string) ($row['code'] ?? ''));
+                if ($code !== '') {
+                    $groups[$id]['codes'][$code] = true;
+                }
+            }
+        }
+        return self::twinSetReport(array_map('intval', $groupIds), $groups);
     }
 
     private static function twinEdge(array $left, array $right): ?array
@@ -542,7 +579,7 @@ final class Repo
         return implode(' · ', $parts);
     }
 
-    private static function twinSetDetail(array $memberIds, array $groups): string
+    private static function twinSetReport(array $memberIds, array $groups): array
     {
         $known = [];
         foreach ($memberIds as $memberId) {
@@ -551,16 +588,20 @@ final class Repo
             }
         }
         if (count($known) < 2) {
-            return '';
+            return ['detail' => '', 'alike' => false];
         }
         $details = [];
+        $alike = true;
         $count = count($known);
         for ($left = 0; $left < $count; $left++) {
             for ($right = $left + 1; $right < $count; $right++) {
                 $details[] = self::twinPairDetail($known[$left], $known[$right]);
+                if (self::twinEdge($known[$left], $known[$right]) === null) {
+                    $alike = false;
+                }
             }
         }
-        return implode(' · ', array_unique($details));
+        return ['detail' => implode(' · ', array_unique($details)), 'alike' => $alike];
     }
 
     private static function twinCodeList(array $codes): string

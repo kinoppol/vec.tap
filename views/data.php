@@ -225,17 +225,25 @@ if ($minMode === 'required' && $maxMode === 'required') {
 <?php if ($canEditPlan && $assignTermId > 0): ?>
 <div class="card twin-card">
     <h2>กลุ่มแฝด</h2>
-    <p class="hint">แสดงเป็นคู่ที่แผนการเรียนตรงกันเกือบทั้งหมด รวมคู่ข้ามระดับอย่าง ปวช. กับ ปวส. ที่มีเพียงบางวิชาไม่เหมือนกัน ตอนจัดตารางคาบที่กลุ่มแฝดลงไว้แล้วจะเป็นสีเหลือง</p>
+    <p class="hint">แต่ละแถวคือหนึ่งคู่ ซ้ายกับขวาคือกลุ่มที่เรียนเหมือนกัน ตอนจัดตารางคาบที่กลุ่มแฝดลงไว้แล้วจะเป็นสีเหลือง</p>
+    <?php
+    $twinWarnings = array_values(array_filter($twinSets, static fn (array $set): bool => empty($set['alike'])));
+    ?>
+    <?php if ($twinWarnings !== []): ?>
+        <div class="banner warn"><i class="bi bi-exclamation-triangle-fill"></i> มีการจับคู่ที่แผนการเรียนไม่เหมือนกัน <?= e(implode(' และ ', array_map(static fn (array $set): string => implode(' กับ ', array_map(static fn (array $member): string => (string) $member['name'], $set['groups'])), $twinWarnings))) ?> ควรเลิกจับกลุ่มนั้น</div>
+    <?php endif; ?>
     <?php if ($twinSets !== []): ?><h3>จับไว้แล้ว</h3><?php endif; ?>
     <?php foreach ($twinSets as $set): ?>
-        <?php
-        $twinSummary = (string) ($set['detail'] ?? '');
-        $twinAlike = str_contains($twinSummary, 'ตรงกัน') || (preg_match('/ร่วม (\d+)/u', $twinSummary, $twinMatch) && (int) $twinMatch[1] > 0);
-        ?>
-        <div class="twin-row">
+        <div class="twin-row<?= empty($set['alike']) ? ' is-warn' : '' ?>">
+            <div class="twin-sides">
+                <?php foreach ($set['groups'] as $index => $member): ?>
+                    <?php if ($index > 0): ?><span class="twin-join">คู่กับ</span><?php endif; ?>
+                    <div class="twin-side"><small><?= e((string) ($member['level'] ?? '')) ?></small><strong><?= e((string) $member['name']) ?></strong></div>
+                <?php endforeach; ?>
+            </div>
             <div>
-                <strong><?= e(implode(' · ', array_map(static fn (array $member): string => (string) $member['name'], $set['groups']))) ?></strong>
-                <small class="<?= $twinAlike ? '' : 'tone-danger' ?>"><?= e($twinSummary !== '' ? $twinSummary : 'ไม่พบรายวิชาที่ตรงกัน') ?></small>
+                <?php if (empty($set['alike'])): ?><strong class="tone-danger">จับคู่ไม่เหมือนกัน</strong><?php endif; ?>
+                <small class="<?= empty($set['alike']) ? 'tone-danger' : '' ?>"><?= e((string) ($set['detail'] ?? '') !== '' ? (string) $set['detail'] : 'ไม่พบรายวิชาที่ตรงกัน') ?></small>
             </div>
             <form method="post" action="<?= e(url('/data')) ?>" onsubmit="return confirm('เลิกจับกลุ่มแฝดนี้')">
                 <?= Csrf::field() ?>
@@ -249,10 +257,13 @@ if ($minMode === 'required' && $maxMode === 'required') {
     <?php if ($twinSuggestions['pairs'] !== []): ?><h3>คู่ที่เรียนเหมือนกัน</h3><?php endif; ?>
     <?php foreach ($twinSuggestions['pairs'] as $pair): ?>
         <div class="twin-row">
-            <div>
-                <strong><?= e($pair['label']) ?></strong>
-                <small><?= e($pair['detail']) ?></small>
+            <div class="twin-sides">
+                <?php foreach ($pair['groups'] as $index => $member): ?>
+                    <?php if ($index > 0): ?><span class="twin-join">คู่กับ</span><?php endif; ?>
+                    <div class="twin-side"><small><?= e((string) $member['level']) ?></small><strong><?= e((string) $member['name']) ?></strong></div>
+                <?php endforeach; ?>
             </div>
+            <small><?= e($pair['detail']) ?></small>
             <form method="post" action="<?= e(url('/data')) ?>">
                 <?= Csrf::field() ?>
                 <input type="hidden" name="action" value="save_twin_set">
@@ -265,12 +276,7 @@ if ($minMode === 'required' && $maxMode === 'required') {
         </div>
     <?php endforeach; ?>
     <?php foreach ($twinSuggestions['notes'] as $note): ?>
-        <div class="twin-row">
-            <div>
-                <strong><?= e($note['label']) ?></strong>
-                <small class="tone-danger"><?= e($note['detail']) ?></small>
-            </div>
-        </div>
+        <div class="banner warn"><?= e($note['label']) ?> <?= e($note['detail']) ?></div>
     <?php endforeach; ?>
     <?php if ($twinSets === [] && $twinSuggestions['pairs'] === [] && $twinSuggestions['notes'] === []): ?>
         <p class="empty">ภาคเรียนนี้ยังไม่พบคู่ที่แผนการเรียนเหมือนกัน</p>

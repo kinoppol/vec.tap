@@ -1272,8 +1272,14 @@ function page_data_post(): void
         try {
             if ($action === 'save_twin_set') {
                 $posted = $_POST['group_ids'] ?? [];
-                Repo::saveTwinSet($schoolId, $termId, is_array($posted) ? $posted : []);
-                flash('จับกลุ่มแฝดแล้ว ตอนจัดตารางคาบที่กลุ่มแฝดลงไว้จะเป็นสีเหลือง');
+                $posted = is_array($posted) ? $posted : [];
+                Repo::saveTwinSet($schoolId, $termId, $posted);
+                $report = Repo::twinReport($schoolId, $posted);
+                if (!$report['alike']) {
+                    flash('จับคู่แล้ว แต่แผนการเรียนไม่เหมือนกัน ' . $report['detail'] . ' ควรเลิกจับกลุ่มนี้', 'err');
+                } else {
+                    flash('จับกลุ่มแฝดแล้ว ตอนจัดตารางคาบที่กลุ่มแฝดลงไว้จะเป็นสีเหลือง');
+                }
             } else {
                 Repo::deleteTwinSet($schoolId, (int) post_string('twin_id'));
                 flash('เลิกจับกลุ่มแฝดแล้ว');
