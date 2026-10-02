@@ -290,6 +290,7 @@ button.is-armed { border-color: var(--pink); background: #FDF2F8; }
 .key-card + .key-card { margin-top: 16px; }
 .model-list { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 4px 12px; }
 .model-list label { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #F4EFF5; }
+.model-list label[hidden] { display: none !important; }
 .model-list em { color: var(--muted); font-style: normal; font-size: 12px; }
 .rms-list { display: grid; gap: 12px; }
 .rms-item { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 14px 0; border-bottom: 1px solid #F4EFF5; }

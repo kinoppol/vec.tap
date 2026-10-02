@@ -138,10 +138,23 @@ document.querySelectorAll('#ai-form input[name="provider"]').forEach((input) => 
 document.querySelectorAll('[data-model-filter]').forEach((input) => {
     input.addEventListener('input', () => {
         const word = input.value.trim().toLowerCase();
-        input.closest('form').querySelectorAll('[data-model-row]').forEach((row) => {
-            const name = row.querySelector('span')?.textContent.toLowerCase() || '';
-            row.hidden = word !== '' && !name.includes(word);
+        const rows = [...input.closest('form').querySelectorAll('[data-model-row]')];
+        let shown = 0;
+        rows.forEach((row) => {
+            const name = (row.querySelector('span')?.textContent || '').toLowerCase();
+            const match = word === '' || name.includes(word);
+            row.hidden = !match;
+            if (match) shown += 1;
         });
+        let empty = input.closest('form').querySelector('[data-model-empty]');
+        if (!empty) {
+            empty = document.createElement('p');
+            empty.className = 'empty';
+            empty.dataset.modelEmpty = '';
+            empty.textContent = 'ไม่พบโมเดลที่ตรงกับคำค้น';
+            input.closest('form').querySelector('.model-list')?.append(empty);
+        }
+        empty.hidden = word === '' || shown !== 0;
     });
 });
 </script>
