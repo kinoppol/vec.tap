@@ -250,7 +250,7 @@ if ($minMode === 'required' && $maxMode === 'required') {
 <?php if (is_array($planDetail)): ?>
 <?php $planTermId = (int) ($planDetail['term_id'] ?? 0); ?>
 <p class="hint"><a href="<?= e(url('/data?tab=plans' . ($planTermId > 0 ? '&term=' . $planTermId : ''))) ?>">← แผนการเรียนทั้งหมด</a></p>
-<div class="card">
+<div class="card" data-plan-editor>
     <small class="muted"><?= e((string) ($planDetail['term_label'] ?? '')) ?></small>
     <?php if ($canEditPlan): ?>
         <form method="post" action="<?= e(url('/data')) ?>" class="plan-rename">
@@ -263,7 +263,8 @@ if ($minMode === 'required' && $maxMode === 'required') {
     <?php else: ?>
         <h2><?= e((string) $planDetail['name']) ?></h2>
     <?php endif; ?>
-    <p class="hint">ใช้กับ <?= count($planDetail['groups']) ?> กลุ่ม: <?= e($planDetail['groups'] !== [] ? implode(', ', array_column($planDetail['groups'], 'name')) : '—') ?><?php if (count($planDetail['groups']) > 1): ?> การเพิ่ม ลบ หรือแก้รายวิชามีผลกับทุกกลุ่มที่ใช้แผนนี้<?php endif; ?></p>
+    <p class="hint">ใช้กับ <?= count($planDetail['groups']) ?> กลุ่ม: <?= e($planDetail['groups'] !== [] ? implode(', ', array_column($planDetail['groups'], 'name')) : '—') ?><?php if (count($planDetail['groups']) > 1): ?> การเพิ่ม ลบ หรือแก้รายวิชามีผลกับทุกกลุ่มที่ใช้แผนนี้<?php endif; ?> รหัสวิชาเดียวกันใช้ค่า ท-ป-น ล่าสุดในทุกแผน การบันทึกแต่ละแถวไม่โหลดหน้าใหม่</p>
+    <p class="warn-note" data-plan-note hidden></p>
     <div class="plan-subject plan-subject-head" aria-hidden="true"><span>รหัส</span><span>ชื่อรายวิชา</span><span>ท</span><span>ป</span><span>น</span><span></span></div>
     <?php foreach ($planDetail['subjects'] as $subject): ?>
         <form method="post" action="<?= e(url('/data')) ?>" class="plan-subject">
@@ -273,12 +274,12 @@ if ($minMode === 'required' && $maxMode === 'required') {
             <input type="hidden" name="subject_id" value="<?= (int) $subject['id'] ?>">
             <input name="code" value="<?= e((string) $subject['code']) ?>" required maxlength="32" aria-label="รหัสวิชา" <?= $canEditPlan ? '' : 'readonly' ?>>
             <input name="name" value="<?= e((string) $subject['name']) ?>" required maxlength="255" aria-label="ชื่อรายวิชา" <?= $canEditPlan ? '' : 'readonly' ?>>
-            <input name="theory" type="number" min="0" max="40" value="<?= (int) $subject['theory'] ?>" required aria-label="ทฤษฎี" <?= $canEditPlan ? '' : 'readonly' ?>>
-            <input name="practice" type="number" min="0" max="40" value="<?= (int) $subject['practice'] ?>" required aria-label="ปฏิบัติ" <?= $canEditPlan ? '' : 'readonly' ?>>
-            <input name="extra" type="number" min="0" max="40" value="<?= (int) $subject['extra'] ?>" required aria-label="ศึกษาด้วยตนเอง" <?= $canEditPlan ? '' : 'readonly' ?>>
+            <input name="theory" type="number" min="0" max="40" value="<?= (int) $subject['theory'] ?>" required aria-label="ทฤษฎี" data-hours-field <?= $canEditPlan ? '' : 'readonly' ?>>
+            <input name="practice" type="number" min="0" max="40" value="<?= (int) $subject['practice'] ?>" required aria-label="ปฏิบัติ" data-hours-field <?= $canEditPlan ? '' : 'readonly' ?>>
+            <input name="extra" type="number" min="0" max="40" value="<?= (int) $subject['extra'] ?>" required aria-label="ศึกษาด้วยตนเอง" data-hours-field <?= $canEditPlan ? '' : 'readonly' ?>>
             <?php if ($canEditPlan): ?>
                 <span class="plan-actions">
-                    <button class="btn" type="submit">บันทึก</button>
+                    <button class="btn" type="submit" data-plan-save>บันทึก</button>
                     <button class="btn btn-danger" type="submit" form="delete-subject-<?= (int) $subject['id'] ?>">ลบ</button>
                 </span>
             <?php else: ?>
@@ -309,6 +310,146 @@ if ($minMode === 'required' && $maxMode === 'required') {
         </form>
     <?php endif; ?>
 </div>
+<?php if ($canEditPlan): ?>
+<script>
+(() => {
+    const editor = document.querySelector("[data-plan-editor]");
+    if (!editor) return;
+    const note = editor.querySelector("[data-plan-note]");
+    const showNote = (text) => {
+        if (!note) return;
+        note.hidden = text === "";
+        note.textContent = text;
+    };
+    const syncButton = (form) => {
+        const button = form.querySelector("[data-plan-save]");
+        if (!button) return;
+        const dirty = [...form.querySelectorAll("[data-hours-field]")].some((field) => field.value !== field.defaultValue);
+        button.classList.toggle("is-dirty", dirty);
+    };
+    const markSaved = (form) => {
+        form.querySelectorAll("input").forEach((field) => {
+            if (field.type !== "hidden") field.defaultValue = field.value;
+        });
+        syncButton(form);
+    };
+    const postForm = async (form) => {
+        const response = await fetch(form.action, {
+            method: "POST",
+            body: new FormData(form),
+            headers: { Accept: "application/json" },
+        });
+        const data = await response.json();
+        if (!data.ok) throw new Error(data.message || "บันทึกไม่สำเร็จ");
+        return data;
+    };
+    const field = (name, value, extra = {}) => {
+        const input = document.createElement("input");
+        input.name = name;
+        Object.entries(extra).forEach(([key, item]) => input.setAttribute(key, item));
+        input.value = value;
+        input.defaultValue = value;
+        return input;
+    };
+    const hidden = (name, value) => field(name, value, { type: "hidden" });
+    const addRow = (subjectId, code, name, theory, practice, extra) => {
+        const sample = editor.querySelector(".plan-subject-add");
+        const planId = sample?.querySelector("[name=plan_id]")?.value || "";
+        const csrf = sample?.querySelector("[name=_csrf]")?.value || "";
+        const action = sample?.action || "";
+        const form = document.createElement("form");
+        form.method = "post";
+        form.action = action;
+        form.className = "plan-subject";
+        form.append(
+            hidden("_csrf", csrf),
+            hidden("action", "save_plan_subject"),
+            hidden("plan_id", planId),
+            hidden("subject_id", String(subjectId)),
+            field("code", code, { required: "", maxlength: "32", "aria-label": "รหัสวิชา" }),
+            field("name", name, { required: "", maxlength: "255", "aria-label": "ชื่อรายวิชา" }),
+            field("theory", theory, { type: "number", min: "0", max: "40", required: "", "aria-label": "ทฤษฎี", "data-hours-field": "" }),
+            field("practice", practice, { type: "number", min: "0", max: "40", required: "", "aria-label": "ปฏิบัติ", "data-hours-field": "" }),
+            field("extra", extra, { type: "number", min: "0", max: "40", required: "", "aria-label": "ศึกษาด้วยตนเอง", "data-hours-field": "" })
+        );
+        const actions = document.createElement("span");
+        actions.className = "plan-actions";
+        const save = document.createElement("button");
+        save.className = "btn";
+        save.type = "submit";
+        save.dataset.planSave = "";
+        save.textContent = "บันทึก";
+        const remove = document.createElement("button");
+        remove.className = "btn btn-danger";
+        remove.type = "submit";
+        remove.textContent = "ลบ";
+        remove.setAttribute("form", "delete-subject-" + subjectId);
+        actions.append(save, remove);
+        form.append(actions);
+        const deletion = document.createElement("form");
+        deletion.id = "delete-subject-" + subjectId;
+        deletion.method = "post";
+        deletion.action = action;
+        deletion.addEventListener("submit", (event) => {
+            if (!confirm("ลบรายวิชานี้จากแผน และนำคาบที่ลงไว้ของวิชานี้ออกจากตาราง")) event.preventDefault();
+        });
+        deletion.append(
+            hidden("_csrf", csrf),
+            hidden("action", "delete_plan_subject"),
+            hidden("plan_id", planId),
+            hidden("subject_id", String(subjectId))
+        );
+        sample.before(form, deletion);
+        editor.querySelector(".empty")?.remove();
+    };
+    editor.addEventListener("input", (event) => {
+        const form = event.target.closest(".plan-subject");
+        if (!form || !event.target.matches("[data-hours-field]")) return;
+        syncButton(form);
+    });
+    editor.addEventListener("submit", async (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || event.defaultPrevented) return;
+        const action = form.querySelector("[name=action]")?.value || "";
+        if (!["save_plan_subject", "add_plan_subject", "delete_plan_subject"].includes(action)) return;
+        event.preventDefault();
+        if (form.dataset.busy === "1") return;
+        form.dataset.busy = "1";
+        showNote("");
+        try {
+            const data = await postForm(form);
+            if (action === "delete_plan_subject") {
+                const subjectId = form.querySelector("[name=subject_id]")?.value || "";
+                editor.querySelector(".plan-subject [name=subject_id][value='" + subjectId + "']")?.closest("form")?.remove();
+                form.remove();
+            } else if (action === "add_plan_subject") {
+                addRow(
+                    data.subject_id || 0,
+                    form.querySelector("[name=code]")?.value || "",
+                    form.querySelector("[name=name]")?.value || "",
+                    form.querySelector("[name=theory]")?.value || "0",
+                    form.querySelector("[name=practice]")?.value || "0",
+                    form.querySelector("[name=extra]")?.value || "0"
+                );
+                form.querySelector("[name=code]").value = "";
+                form.querySelector("[name=name]").value = "";
+                ["theory", "practice", "extra"].forEach((name) => {
+                    const input = form.querySelector("[name=" + name + "]");
+                    input.value = "0";
+                    input.defaultValue = "0";
+                });
+            } else {
+                markSaved(form);
+            }
+        } catch (error) {
+            showNote(error.message || "บันทึกไม่สำเร็จ");
+        } finally {
+            delete form.dataset.busy;
+        }
+    });
+})();
+</script>
+<?php endif; ?>
 <?php else: ?>
 <?php $planTermId = is_array($term) ? (int) $term['id'] : 0; ?>
 <?php if ($canEditPlan): ?><p class="hint">ค้นหาหรือเรียงคอลัมน์เพื่อเปิดแผนของกลุ่ม แล้วเพิ่ม ลบ หรือแก้รายวิชา แผนที่ใช้ร่วมกันหลายกลุ่มจะแก้พร้อมกัน</p><?php endif; ?>

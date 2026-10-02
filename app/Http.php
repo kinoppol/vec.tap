@@ -609,6 +609,15 @@ function schedule_board_html(int $schoolId, array $user, array $group): string
     return (string) ob_get_clean();
 }
 
+function plan_edit_json(bool $ok, string $message, array $extra = []): void
+{
+    if (!$ok) {
+        http_response_code(422);
+    }
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['ok' => $ok, 'message' => $message] + $extra, JSON_UNESCAPED_UNICODE);
+    exit;
+}
 function schedule_board_json(bool $ok, string $message, string $html = ''): void
 {
     header('Content-Type: application/json; charset=UTF-8');
@@ -1254,6 +1263,9 @@ function page_data_post(): void
         $planId = (int) post_string('plan_id');
         $back = '/data?tab=plans' . ($planId > 0 ? '&plan=' . $planId : '');
         if (!in_array($user['role'], ['superadmin', 'school_admin'], true) || $schoolId <= 0) {
+            if (wants_json()) {
+                plan_edit_json(false, 'เฉพาะผู้ดูแลสถานศึกษาแก้ไขแผนการเรียนได้');
+            }
             flash('เฉพาะผู้ดูแลสถานศึกษาแก้ไขแผนการเรียนได้', 'err');
             redirect('/data?tab=plans');
         }
@@ -1267,7 +1279,7 @@ function page_data_post(): void
                 Repo::renamePlan($schoolId, $planId, post_string('name'));
                 flash('บันทึกชื่อแผนการเรียนแล้ว');
             } elseif ($action === 'add_plan_subject') {
-                Repo::addPlanSubject(
+                $subjectId = Repo::addPlanSubject(
                     $schoolId,
                     $planId,
                     post_string('code'),
@@ -1276,6 +1288,9 @@ function page_data_post(): void
                     schedule_hour_value(post_string('practice')),
                     schedule_hour_value(post_string('extra'))
                 );
+                if (wants_json()) {
+                    plan_edit_json(true, 'เพิ่มรายวิชาในแผนแล้ว', ['subject_id' => $subjectId]);
+                }
                 flash('เพิ่มรายวิชาในแผนแล้ว');
             } elseif ($action === 'save_plan_subject') {
                 Repo::updatePlanSubject(
@@ -1288,15 +1303,25 @@ function page_data_post(): void
                     schedule_hour_value(post_string('practice')),
                     schedule_hour_value(post_string('extra'))
                 );
+                if (wants_json()) {
+                    plan_edit_json(true, 'บันทึกรายวิชาในแผนแล้ว');
+                }
                 flash('บันทึกรายวิชาในแผนแล้ว');
             } else {
                 $removed = Repo::deletePlanSubject($schoolId, $planId, (int) post_string('subject_id'));
-                flash($removed > 0
+                $message = $removed > 0
                     ? 'ลบรายวิชาแล้ว และนำ ' . $removed . ' คาบที่ลงไว้ของวิชานี้ออกจากตาราง'
-                    : 'ลบรายวิชาออกจากแผนแล้ว');
+                    : 'ลบรายวิชาออกจากแผนแล้ว';
+                if (wants_json()) {
+                    plan_edit_json(true, $message);
+                }
+                flash($message);
             }
         } catch (Throwable $exception) {
             $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'บันทึกแผนการเรียนไม่สำเร็จ';
+            if (wants_json()) {
+                plan_edit_json(false, $message);
+            }
             flash($message, 'err');
         }
         redirect($back);

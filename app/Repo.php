@@ -495,10 +495,11 @@ final class Repo
         )->execute(['name' => $name, 'id' => $planId, 'school_id' => $schoolId]);
     }
 
-    public static function addPlanSubject(int $schoolId, int $planId, string $code, string $name, int $theory, int $practice, int $extra): void
+    public static function addPlanSubject(int $schoolId, int $planId, string $code, string $name, int $theory, int $practice, int $extra): int
     {
         self::assertPlan($schoolId, $planId);
         [$code, $name] = self::planSubjectText($code, $name);
+        self::assertCodeHours($schoolId, $code, $theory, $practice);
         $sort = Database::pdo()->prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 FROM subjects WHERE plan_id = :plan_id');
         $sort->execute(['plan_id' => $planId]);
         try {
@@ -521,7 +522,9 @@ final class Repo
             }
             throw $exception;
         }
-        self::refreshPlanCredits($schoolId, $planId);
+        $subjectId = (int) Database::pdo()->lastInsertId();
+        self::syncSubjectHours($schoolId, $code, $theory, $practice, $extra);
+        return $subjectId;
     }
 
     public static function updatePlanSubject(int $schoolId, int $planId, int $subjectId, string $code, string $name, int $theory, int $practice, int $extra): void
@@ -531,17 +534,15 @@ final class Repo
         if ($theory + $practice < self::placedHours($schoolId, $subjectId)) {
             throw new RuntimeException('ชั่วโมงทฤษฎีกับปฏิบัติรวมกันน้อยกว่าคาบที่ลงไว้แล้ว ลบคาบออกก่อนแล้วค่อยลดชั่วโมง');
         }
+        self::assertCodeHours($schoolId, $code, $theory, $practice);
         try {
             $update = Database::pdo()->prepare(
-                'UPDATE subjects SET code = :code, name = :name, theory = :theory, practice = :practice, extra = :extra
+                'UPDATE subjects SET code = :code, name = :name
                  WHERE id = :id AND school_id = :school_id AND plan_id = :plan_id'
             );
             $update->execute([
                 'code' => $code,
                 'name' => $name,
-                'theory' => $theory,
-                'practice' => $practice,
-                'extra' => $extra,
                 'id' => $subjectId,
                 'school_id' => $schoolId,
                 'plan_id' => $planId,
@@ -555,7 +556,7 @@ final class Repo
         if ($update->rowCount() === 0 && !self::planSubjectExists($schoolId, $planId, $subjectId)) {
             throw new RuntimeException('ไม่พบรายวิชานี้ในแผน');
         }
-        self::refreshPlanCredits($schoolId, $planId);
+        self::syncSubjectHours($schoolId, $code, $theory, $practice, $extra);
     }
 
     public static function deletePlanSubject(int $schoolId, int $planId, int $subjectId): int
@@ -606,29 +607,70 @@ final class Repo
         if ($planId <= 0 || $subjectId <= 0) {
             throw new RuntimeException('กลุ่มนี้ยังไม่มีแผนการเรียน จึงปรับ ท-ป-น ไม่ได้');
         }
-        $pdo = Database::pdo();
-        $update = $pdo->prepare(
-            'UPDATE subjects SET theory = :theory, practice = :practice, extra = :extra
-             WHERE id = :id AND school_id = :school_id AND plan_id = :plan_id'
+        $code = Database::pdo()->prepare(
+            'SELECT code FROM subjects WHERE id = :id AND school_id = :school_id AND plan_id = :plan_id LIMIT 1'
         );
-        $update->execute([
+        $code->execute(['id' => $subjectId, 'school_id' => $schoolId, 'plan_id' => $planId]);
+        $subjectCode = $code->fetchColumn();
+        if ($subjectCode === false || $subjectCode === '') {
+            throw new RuntimeException('ไม่พบรายวิชานี้ในแผนของกลุ่มที่กำลังจัด');
+        }
+        self::syncSubjectHours($schoolId, (string) $subjectCode, $theory, $practice, $extra);
+    }
+
+    private static function syncSubjectHours(int $schoolId, string $code, int $theory, int $practice, int $extra): void
+    {
+        self::assertCodeHours($schoolId, $code, $theory, $practice);
+        $pdo = Database::pdo();
+        $plans = $pdo->prepare('SELECT DISTINCT plan_id FROM subjects WHERE school_id = :school_id AND code = :code');
+        $plans->execute(['school_id' => $schoolId, 'code' => $code]);
+        $planIds = $plans->fetchAll(PDO::FETCH_COLUMN);
+        $pdo->prepare(
+            'UPDATE subjects SET theory = :theory, practice = :practice, extra = :extra
+             WHERE school_id = :school_id AND code = :code'
+        )->execute([
             'theory' => $theory,
             'practice' => $practice,
             'extra' => $extra,
-            'id' => $subjectId,
             'school_id' => $schoolId,
-            'plan_id' => $planId,
+            'code' => $code,
         ]);
-        if ($update->rowCount() === 0) {
-            $exists = $pdo->prepare(
-                'SELECT id FROM subjects WHERE id = :id AND school_id = :school_id AND plan_id = :plan_id LIMIT 1'
-            );
-            $exists->execute(['id' => $subjectId, 'school_id' => $schoolId, 'plan_id' => $planId]);
-            if (!$exists->fetchColumn()) {
-                throw new RuntimeException('ไม่พบรายวิชานี้ในแผนของกลุ่มที่กำลังจัด');
-            }
+        foreach ($planIds as $planId) {
+            self::refreshPlanCredits($schoolId, (int) $planId);
         }
-        self::refreshPlanCredits($schoolId, $planId);
+    }
+
+    private static function assertCodeHours(int $schoolId, string $code, int $theory, int $practice): void
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT s.id
+             FROM subjects s
+             LEFT JOIN timetable_entries e ON e.subject_id = s.id AND e.school_id = s.school_id
+             WHERE s.school_id = :school_id AND s.code = :code
+             GROUP BY s.id
+             HAVING COALESCE(SUM(e.length_periods), 0) > :need
+             LIMIT 1'
+        );
+        $statement->execute([
+            'school_id' => $schoolId,
+            'code' => $code,
+            'need' => $theory + $practice,
+        ]);
+        $subjectId = (int) $statement->fetchColumn();
+        if ($subjectId <= 0) {
+            return;
+        }
+        $group = Database::pdo()->prepare(
+            'SELECT g.name
+             FROM student_groups g
+             JOIN subjects s ON s.plan_id = g.plan_id AND s.school_id = g.school_id
+             WHERE s.id = :id
+             LIMIT 1'
+        );
+        $group->execute(['id' => $subjectId]);
+        $name = trim((string) $group->fetchColumn());
+        $where = $name !== '' ? 'ในกลุ่ม ' . $name . ' ' : '';
+        throw new RuntimeException('ชั่วโมงทฤษฎีกับปฏิบัติรวมกันน้อยกว่าคาบที่ลงไว้แล้ว' . $where . 'ลบคาบออกก่อนแล้วค่อยลดชั่วโมง');
     }
 
     private static function refreshPlanCredits(int $schoolId, int $planId): void
