@@ -185,7 +185,21 @@ if ($minMode === 'required' && $maxMode === 'required') {
             <?php $assigned = $schedulers[(int) $group['id']] ?? []; ?>
             <tr>
                 <td><?= e((string) ($group['term_label'] ?? '')) ?></td>
-                <td><strong><?= e($group['name']) ?></strong></td>
+                <td>
+                    <strong><?= e($group['name']) ?></strong>
+                    <?php if ($canEditPlan): ?>
+                        <?php if ((int) ($group['plan_id'] ?? 0) > 0): ?>
+                            <a class="plan-link" href="<?= e(url('/data?tab=plans&plan=' . (int) $group['plan_id'])) ?>">แก้แผนการเรียน</a>
+                        <?php else: ?>
+                            <form method="post" action="<?= e(url('/data')) ?>" class="plan-create">
+                                <?= Csrf::field() ?>
+                                <input type="hidden" name="action" value="create_group_plan">
+                                <input type="hidden" name="group_id" value="<?= (int) $group['id'] ?>">
+                                <button class="plan-link" type="submit">สร้างแผนการเรียน</button>
+                            </form>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </td>
                 <td><?= e($group['level']) ?></td>
                 <td class="mono"><?= (int) $group['student_count'] ?> คน</td>
                 <td><?= e($group['advisor_name'] ?: '—') ?></td>
@@ -233,6 +247,85 @@ if ($minMode === 'required' && $maxMode === 'required') {
     </table>
 </div>
 <?php elseif ($tab === 'plans'): ?>
+<?php if (is_array($planDetail)): ?>
+<?php $planTermId = (int) ($planDetail['term_id'] ?? 0); ?>
+<p class="hint"><a href="<?= e(url('/data?tab=plans' . ($planTermId > 0 ? '&term=' . $planTermId : ''))) ?>">← แผนการเรียนทั้งหมด</a></p>
+<div class="card">
+    <small class="muted"><?= e((string) ($planDetail['term_label'] ?? '')) ?></small>
+    <?php if ($canEditPlan): ?>
+        <form method="post" action="<?= e(url('/data')) ?>" class="plan-rename">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="action" value="rename_plan">
+            <input type="hidden" name="plan_id" value="<?= (int) $planDetail['id'] ?>">
+            <input name="name" value="<?= e((string) $planDetail['name']) ?>" required maxlength="255" aria-label="ชื่อแผนการเรียน">
+            <button class="btn" type="submit">บันทึกชื่อ</button>
+        </form>
+    <?php else: ?>
+        <h2><?= e((string) $planDetail['name']) ?></h2>
+    <?php endif; ?>
+    <p class="hint">ใช้กับ <?= count($planDetail['groups']) ?> กลุ่ม: <?= e($planDetail['groups'] !== [] ? implode(', ', array_column($planDetail['groups'], 'name')) : '—') ?><?php if (count($planDetail['groups']) > 1): ?> การเพิ่ม ลบ หรือแก้รายวิชามีผลกับทุกกลุ่มที่ใช้แผนนี้<?php endif; ?></p>
+    <div class="plan-subject plan-subject-head" aria-hidden="true"><span>รหัส</span><span>ชื่อรายวิชา</span><span>ท</span><span>ป</span><span>น</span><span></span></div>
+    <?php foreach ($planDetail['subjects'] as $subject): ?>
+        <form method="post" action="<?= e(url('/data')) ?>" class="plan-subject">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="action" value="save_plan_subject">
+            <input type="hidden" name="plan_id" value="<?= (int) $planDetail['id'] ?>">
+            <input type="hidden" name="subject_id" value="<?= (int) $subject['id'] ?>">
+            <input name="code" value="<?= e((string) $subject['code']) ?>" required maxlength="32" aria-label="รหัสวิชา" <?= $canEditPlan ? '' : 'readonly' ?>>
+            <input name="name" value="<?= e((string) $subject['name']) ?>" required maxlength="255" aria-label="ชื่อรายวิชา" <?= $canEditPlan ? '' : 'readonly' ?>>
+            <input name="theory" type="number" min="0" max="40" value="<?= (int) $subject['theory'] ?>" required aria-label="ทฤษฎี" <?= $canEditPlan ? '' : 'readonly' ?>>
+            <input name="practice" type="number" min="0" max="40" value="<?= (int) $subject['practice'] ?>" required aria-label="ปฏิบัติ" <?= $canEditPlan ? '' : 'readonly' ?>>
+            <input name="extra" type="number" min="0" max="40" value="<?= (int) $subject['extra'] ?>" required aria-label="ศึกษาด้วยตนเอง" <?= $canEditPlan ? '' : 'readonly' ?>>
+            <?php if ($canEditPlan): ?>
+                <span class="plan-actions">
+                    <button class="btn" type="submit">บันทึก</button>
+                    <button class="btn btn-danger" type="submit" form="delete-subject-<?= (int) $subject['id'] ?>">ลบ</button>
+                </span>
+            <?php else: ?>
+                <span></span>
+            <?php endif; ?>
+        </form>
+        <?php if ($canEditPlan): ?>
+            <form id="delete-subject-<?= (int) $subject['id'] ?>" method="post" action="<?= e(url('/data')) ?>" onsubmit="return confirm('ลบรายวิชานี้จากแผน และนำคาบที่ลงไว้ของวิชานี้ออกจากตาราง')">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="action" value="delete_plan_subject">
+                <input type="hidden" name="plan_id" value="<?= (int) $planDetail['id'] ?>">
+                <input type="hidden" name="subject_id" value="<?= (int) $subject['id'] ?>">
+            </form>
+        <?php endif; ?>
+    <?php endforeach; ?>
+    <?php if ($planDetail['subjects'] === []): ?><p class="empty">แผนนี้ยังไม่มีรายวิชา</p><?php endif; ?>
+    <?php if ($canEditPlan): ?>
+        <form method="post" action="<?= e(url('/data')) ?>" class="plan-subject plan-subject-add">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="action" value="add_plan_subject">
+            <input type="hidden" name="plan_id" value="<?= (int) $planDetail['id'] ?>">
+            <input name="code" required maxlength="32" placeholder="รหัสวิชา" aria-label="รหัสวิชาใหม่">
+            <input name="name" required maxlength="255" placeholder="ชื่อรายวิชา" aria-label="ชื่อรายวิชาใหม่">
+            <input name="theory" type="number" min="0" max="40" value="0" required aria-label="ทฤษฎี">
+            <input name="practice" type="number" min="0" max="40" value="0" required aria-label="ปฏิบัติ">
+            <input name="extra" type="number" min="0" max="40" value="0" required aria-label="ศึกษาด้วยตนเอง">
+            <button class="btn btn-primary" type="submit">เพิ่มรายวิชา</button>
+        </form>
+    <?php endif; ?>
+</div>
+<?php else: ?>
+<?php $planTermId = is_array($term) ? (int) $term['id'] : 0; ?>
+<?php if ($terms !== []): ?>
+<div class="card toolbar">
+    <form method="get" action="<?= e(url('/data')) ?>" class="term-switch">
+        <input type="hidden" name="tab" value="plans">
+        <label>ภาคเรียน
+            <select name="term" onchange="this.form.submit()" aria-label="ภาคเรียนของแผนการเรียน">
+                <?php foreach ($terms as $item): ?>
+                    <option value="<?= (int) $item['id'] ?>" <?= (int) $item['id'] === $planTermId ? 'selected' : '' ?>><?= e($item['label']) ?><?= (int) $item['is_current'] === 1 ? ' (ปัจจุบัน)' : '' ?></option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+    </form>
+</div>
+<?php endif; ?>
+<?php if ($canEditPlan): ?><p class="hint">เลือกแผนของกลุ่มเพื่อเพิ่ม ลบ หรือแก้รายวิชา แผนที่นำเข้าจาก RMS แก้ได้จากที่นี่ หรือจากปุ่มแก้แผนในแท็บกลุ่มผู้เรียน</p><?php endif; ?>
 <div class="plan-grid">
     <?php foreach ($plans as $plan): ?>
         <article class="card plan">
@@ -240,10 +333,12 @@ if ($minMode === 'required' && $maxMode === 'required') {
             <strong><?= e($plan['name']) ?></strong>
             <p><b><?= (int) $plan['subject_count'] ?></b> รายวิชา <b><?= (int) $plan['hours_per_week'] ?></b> ชม./สัปดาห์ <b><?= (int) $plan['credits'] ?></b> หน่วยกิต</p>
             <span>ใช้กับ: <?= e($plan['groups'] ? implode(', ', $plan['groups']) : '—') ?></span>
+            <?php if ($canEditPlan): ?><a class="btn" href="<?= e(url('/data?tab=plans&plan=' . (int) $plan['id'])) ?>">แก้ไขรายวิชา</a><?php endif; ?>
         </article>
     <?php endforeach; ?>
-    <?php if ($plans === []): ?><p class="empty">ยังไม่มีแผนการเรียน</p><?php endif; ?>
+    <?php if ($plans === []): ?><p class="empty">ภาคเรียนนี้ยังไม่มีแผนการเรียน</p><?php endif; ?>
 </div>
+<?php endif; ?>
 <?php elseif ($tab === 'subjects'): ?>
 <div class="card table-wrap">
     <table>

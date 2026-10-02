@@ -766,7 +766,7 @@ function page_data(): void
     if (!in_array($tab, ['teachers', 'groups', 'plans', 'subjects', 'rooms'], true)) {
         $tab = 'teachers';
     }
-    $context = $tab === 'groups' ? schedule_context($schoolId) : ['terms' => [], 'term' => null];
+    $context = in_array($tab, ['groups', 'plans'], true) ? schedule_context($schoolId) : ['terms' => [], 'term' => null];
     $termId = (int) ($context['term']['id'] ?? 0);
     $groups = $schoolId > 0 ? Repo::groups($schoolId) : [];
     if ($tab === 'groups' && $termId > 0) {
@@ -775,11 +775,22 @@ function page_data(): void
             static fn (array $group): bool => (int) $group['term_id'] === $termId
         ));
     }
+    $plans = $schoolId > 0 ? Repo::plans($schoolId) : [];
+    $planId = (int) ($_GET['plan'] ?? 0);
+    $planDetail = $tab === 'plans' && $planId > 0 && $schoolId > 0 ? Repo::planDetail($schoolId, $planId) : null;
+    if ($tab === 'plans' && $planDetail === null && $termId > 0) {
+        $plans = array_values(array_filter(
+            $plans,
+            static fn (array $plan): bool => (int) $plan['term_id'] === $termId
+        ));
+    }
     render('data', [
         'currentPage' => 'data',
         'tab' => $tab,
         'canEdit' => ScheduleActions::canEdit($user) && $schoolId > 0,
         'canAssign' => in_array($user['role'], ['superadmin', 'school_admin'], true) && $schoolId > 0,
+        'canEditPlan' => in_array($user['role'], ['superadmin', 'school_admin'], true) && $schoolId > 0,
+        'planDetail' => $planDetail,
         'teachers' => $schoolId > 0 ? Repo::teachers($schoolId) : [],
         'teacherAccounts' => $schoolId > 0 ? Repo::teacherAccounts($schoolId) : [],
         'schedulers' => $schoolId > 0 ? Repo::groupSchedulers($schoolId) : [],
@@ -788,7 +799,7 @@ function page_data(): void
         'groups' => $groups,
         'terms' => $context['terms'],
         'term' => $context['term'],
-        'plans' => $schoolId > 0 ? Repo::plans($schoolId) : [],
+        'plans' => $plans,
         'subjects' => $schoolId > 0 ? Repo::subjects($schoolId) : [],
         'buildings' => $schoolId > 0 ? Repo::buildings($schoolId) : [],
         'rooms' => $schoolId > 0 ? Repo::rooms($schoolId) : [],
@@ -1238,6 +1249,57 @@ function page_data_post(): void
             flash($message, 'err');
         }
         redirect('/data?tab=teachers');
+    }
+    if (in_array($action, ['save_plan_subject', 'delete_plan_subject', 'add_plan_subject', 'rename_plan', 'create_group_plan'], true)) {
+        $planId = (int) post_string('plan_id');
+        $back = '/data?tab=plans' . ($planId > 0 ? '&plan=' . $planId : '');
+        if (!in_array($user['role'], ['superadmin', 'school_admin'], true) || $schoolId <= 0) {
+            flash('เฉพาะผู้ดูแลสถานศึกษาแก้ไขแผนการเรียนได้', 'err');
+            redirect('/data?tab=plans');
+        }
+        try {
+            if ($action === 'create_group_plan') {
+                $planId = Repo::ensureGroupPlan($schoolId, (int) post_string('group_id'));
+                flash('สร้างแผนการเรียนของกลุ่มนี้แล้ว');
+                redirect('/data?tab=plans&plan=' . $planId);
+            }
+            if ($action === 'rename_plan') {
+                Repo::renamePlan($schoolId, $planId, post_string('name'));
+                flash('บันทึกชื่อแผนการเรียนแล้ว');
+            } elseif ($action === 'add_plan_subject') {
+                Repo::addPlanSubject(
+                    $schoolId,
+                    $planId,
+                    post_string('code'),
+                    post_string('name'),
+                    schedule_hour_value(post_string('theory')),
+                    schedule_hour_value(post_string('practice')),
+                    schedule_hour_value(post_string('extra'))
+                );
+                flash('เพิ่มรายวิชาในแผนแล้ว');
+            } elseif ($action === 'save_plan_subject') {
+                Repo::updatePlanSubject(
+                    $schoolId,
+                    $planId,
+                    (int) post_string('subject_id'),
+                    post_string('code'),
+                    post_string('name'),
+                    schedule_hour_value(post_string('theory')),
+                    schedule_hour_value(post_string('practice')),
+                    schedule_hour_value(post_string('extra'))
+                );
+                flash('บันทึกรายวิชาในแผนแล้ว');
+            } else {
+                $removed = Repo::deletePlanSubject($schoolId, $planId, (int) post_string('subject_id'));
+                flash($removed > 0
+                    ? 'ลบรายวิชาแล้ว และนำ ' . $removed . ' คาบที่ลงไว้ของวิชานี้ออกจากตาราง'
+                    : 'ลบรายวิชาออกจากแผนแล้ว');
+            }
+        } catch (Throwable $exception) {
+            $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'บันทึกแผนการเรียนไม่สำเร็จ';
+            flash($message, 'err');
+        }
+        redirect($back);
     }
     if ($action === 'import_skills') {
         if (!ScheduleActions::canEdit($user) || $schoolId <= 0) {
