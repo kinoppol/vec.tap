@@ -465,7 +465,7 @@ if ($minMode === 'required' && $maxMode === 'required') {
         syncButton(form);
     };
     const postForm = async (form) => {
-        const response = await fetch(form.action, {
+        const response = await fetch(form.getAttribute("action") || "", {
             method: "POST",
             body: new FormData(form),
             headers: { Accept: "application/json" },
@@ -487,10 +487,10 @@ if ($minMode === 'required' && $maxMode === 'required') {
         const sample = editor.querySelector(".plan-subject-add");
         const planId = sample?.querySelector("[name=plan_id]")?.value || "";
         const csrf = sample?.querySelector("[name=_csrf]")?.value || "";
-        const action = sample?.action || "";
+        const action = sample?.getAttribute("action") || "";
         const form = document.createElement("form");
         form.method = "post";
-        form.action = action;
+        form.setAttribute("action", action);
         form.className = "plan-subject";
         form.append(
             hidden("_csrf", csrf),
