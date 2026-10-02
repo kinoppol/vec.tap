@@ -66,8 +66,8 @@ if ($minMode === 'required' && $maxMode === 'required') {
         . ' · สูงสุดเป็น' . ($maxMode === 'required' ? 'ข้อบังคับ' : 'ข้อแนะนำ');
 }
 ?>
-<div class="hint-fold" data-hint-fold>
-    <button class="hint-toggle" type="button" data-hint-toggle aria-expanded="true"><i class="bi bi-chevron-up"></i> ย่อคำอธิบาย</button>
+<div class="hint-fold is-collapsed" data-hint-fold>
+    <button class="hint-toggle" type="button" data-hint-toggle aria-expanded="false"><i class="bi bi-chevron-down"></i> แสดงคำอธิบาย</button>
     <div data-hint-body>
         <p class="hint"><?= e($hourHint) ?></p>
         <p class="hint">ไฟล์ทักษะมีคอลัมน์ชื่อกับทักษะ หนึ่งแถวต่อหนึ่งทักษะ หรือหลายทักษะในช่องเดียวคั่นด้วย | การนำเข้าแทนที่ทักษะของครูที่มีชื่อในไฟล์</p>
