@@ -645,7 +645,7 @@ final class Repo
         foreach ($lessons->fetchAll() as $lesson) {
             $day = (int) $lesson['day_index'];
             $start = (int) $lesson['start_period'];
-            $end = min(10, $start + max(1, (int) $lesson['length_periods']) - 1);
+            $end = min(ScheduleEngine::LAST_PERIOD, $start + max(1, (int) $lesson['length_periods']) - 1);
             $code = trim((string) $lesson['code']);
             $line = trim((string) $lesson['group_name'] . ' · ' . $code);
             for ($period = $start; $period <= $end; $period++) {
@@ -1656,13 +1656,13 @@ final class Repo
         $statement = Database::pdo()->prepare('SELECT max_period FROM schools WHERE id = :id');
         $statement->execute(['id' => $schoolId]);
         $value = (int) $statement->fetchColumn();
-        return $value >= 6 && $value <= 10 ? $value : 9;
+        return $value >= 6 && $value <= ScheduleEngine::LAST_PERIOD ? $value : 9;
     }
 
     public static function setTimetableMaxPeriod(int $schoolId, int $period): void
     {
-        if ($period < 6 || $period > 10) {
-            throw new RuntimeException('ชั่วโมงสูงสุดของตารางต้องอยู่ระหว่าง 6 ถึง 10 คาบ');
+        if ($period < 6 || $period > ScheduleEngine::LAST_PERIOD) {
+            throw new RuntimeException('ชั่วโมงสูงสุดของตารางต้องอยู่ระหว่าง 6 ถึง ' . ScheduleEngine::LAST_PERIOD . ' คาบ');
         }
         Database::pdo()->prepare('UPDATE schools SET max_period = :max_period WHERE id = :id')
             ->execute(['max_period' => $period, 'id' => $schoolId]);

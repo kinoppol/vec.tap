@@ -125,7 +125,7 @@ code, .mono { font-family: "IBM Plex Mono", monospace; }
 .timetable-scroll { grid-column: 1; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-x: auto; }
 .timetable-card > .hint { grid-column: 1; margin: 0; }
 .side { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 16px; }
-.timetable { min-width: 840px; display: grid; grid-template-columns: 72px repeat(10, minmax(0, 1fr)); grid-template-rows: 44px repeat(5, 84px); gap: 4px; }
+.timetable { --periods: 10; min-width: calc(72px + var(--periods) * 76px); display: grid; grid-template-columns: 72px repeat(var(--periods), minmax(0, 1fr)); grid-template-rows: 44px repeat(5, 84px); gap: 4px; }
 .period-head, .day-head { display: flex; align-items: center; justify-content: center; text-align: center; }
 .period-head { flex-direction: column; color: var(--muted); font-size: 11px; }
 .period-head strong { color: var(--ink); }

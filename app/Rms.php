@@ -320,11 +320,11 @@ final class Rms
         if ($periods !== null && $periods > 0) {
             $length = $periods;
         }
-        if ($start === null || $length === null || $start < 1 || $start > 9 || $length < 1) {
+        if ($start === null || $length === null || $start < 1 || $start > ScheduleEngine::LAST_PERIOD || $length < 1) {
             return null;
         }
-        if ($start + $length > 10) {
-            $length = 10 - $start;
+        if ($start + $length > ScheduleEngine::LAST_PERIOD + 1) {
+            $length = ScheduleEngine::LAST_PERIOD + 1 - $start;
         }
         return [$start, $length];
     }

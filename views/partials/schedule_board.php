@@ -1,7 +1,7 @@
 <form method="post" action="<?= e(url('/schedule')) ?>" class="card timetable-card">
     <?= Csrf::field() ?>
     <input type="hidden" name="group_id" value="<?= (int) $model['group']['id'] ?>">
-    <div class="timetable-scroll"><div class="timetable" data-grid>
+    <div class="timetable-scroll"><div class="timetable" data-grid style="--periods: <?= count($model['periods']) ?>">
         <?php foreach ($model['periods'] as $period): ?>
             <div class="period-head" style="grid-column: <?= (int) $period['column'] ?>; grid-row: 1"><strong>คาบ <?= (int) $period['no'] ?></strong><span><?= e($period['time']) ?></span></div>
         <?php endforeach; ?>

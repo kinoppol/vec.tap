@@ -11,7 +11,7 @@
     </header>
     <label>คาบสุดท้ายที่ใช้ได้
         <select name="max_period" onchange="this.form.submit()" <?= $canEdit ? '' : 'disabled' ?> aria-label="ชั่วโมงสูงสุดของตาราง">
-            <?php for ($period = 6; $period <= 10; $period++): ?>
+            <?php for ($period = 6; $period <= ScheduleEngine::LAST_PERIOD; $period++): ?>
                 <option value="<?= $period ?>" <?= $period === (int) $maxPeriod ? 'selected' : '' ?>><?= $period ?> คาบ · เลิก <?= e(ScheduleEngine::TIMES[$period]) ?> น.</option>
             <?php endfor; ?>
         </select>
