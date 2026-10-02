@@ -421,11 +421,11 @@ final class Repo
         $statement->execute(['school_id' => $schoolId]);
         $plans = $statement->fetchAll();
         $groups = Database::pdo()->prepare(
-            'SELECT name FROM student_groups WHERE school_id = :school_id AND plan_id = :plan_id ORDER BY id'
+            'SELECT name, rms_group_code FROM student_groups WHERE school_id = :school_id AND plan_id = :plan_id ORDER BY id'
         );
         foreach ($plans as &$plan) {
             $groups->execute(['school_id' => $schoolId, 'plan_id' => $plan['id']]);
-            $plan['groups'] = $groups->fetchAll(PDO::FETCH_COLUMN);
+            $plan['groups'] = $groups->fetchAll();
         }
         unset($plan);
         return $plans;
@@ -446,7 +446,7 @@ final class Repo
             return null;
         }
         $groups = Database::pdo()->prepare(
-            'SELECT id, name FROM student_groups WHERE school_id = :school_id AND plan_id = :plan_id ORDER BY id'
+            'SELECT id, name, rms_group_code FROM student_groups WHERE school_id = :school_id AND plan_id = :plan_id ORDER BY id'
         );
         $groups->execute(['school_id' => $schoolId, 'plan_id' => $planId]);
         $plan['groups'] = $groups->fetchAll();

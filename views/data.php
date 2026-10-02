@@ -263,7 +263,10 @@ if ($minMode === 'required' && $maxMode === 'required') {
     <?php else: ?>
         <h2><?= e((string) $planDetail['name']) ?></h2>
     <?php endif; ?>
-    <p class="hint">ใช้กับ <?= count($planDetail['groups']) ?> กลุ่ม: <?= e($planDetail['groups'] !== [] ? implode(', ', array_column($planDetail['groups'], 'name')) : '—') ?><?php if (count($planDetail['groups']) > 1): ?> การเพิ่ม ลบ หรือแก้รายวิชามีผลกับทุกกลุ่มที่ใช้แผนนี้<?php endif; ?> รหัสวิชาเดียวกันใช้ค่า ท-ป-น ล่าสุดในทุกแผน การบันทึกแต่ละแถวไม่โหลดหน้าใหม่</p>
+    <p class="hint">ใช้กับ <?= count($planDetail['groups']) ?> กลุ่ม: <?= e($planDetail['groups'] !== [] ? implode(', ', array_map(static function (array $group): string {
+        $code = trim((string) ($group['rms_group_code'] ?? ''));
+        return $code !== '' ? $group['name'] . ' (' . $code . ')' : (string) $group['name'];
+    }, $planDetail['groups'])) : '—') ?><?php if (count($planDetail['groups']) > 1): ?> การเพิ่ม ลบ หรือแก้รายวิชามีผลกับทุกกลุ่มที่ใช้แผนนี้<?php endif; ?> รหัสวิชาเดียวกันใช้ค่า ท-ป-น ล่าสุดในทุกแผน การบันทึกแต่ละแถวไม่โหลดหน้าใหม่</p>
     <p class="warn-note" data-plan-note hidden></p>
     <div class="plan-subject plan-subject-head" aria-hidden="true"><span>รหัส</span><span>ชื่อรายวิชา</span><span>ท</span><span>ป</span><span>น</span><span></span></div>
     <?php foreach ($planDetail['subjects'] as $subject): ?>
@@ -476,13 +479,14 @@ if ($minMode === 'required' && $maxMode === 'required') {
             </select>
         </label>
         <label class="dt-field dt-search">ค้นหา
-            <input type="search" data-dt-search placeholder="ชื่อแผนหรือกลุ่ม" aria-label="ค้นหาแผนการเรียน">
+            <input type="search" data-dt-search placeholder="ชื่อแผน รหัสกลุ่ม หรือกลุ่ม" aria-label="ค้นหาแผนการเรียน">
         </label>
     </div>
     <table>
         <thead>
             <tr>
                 <th data-dt-sort="text" class="is-sorted">แผนการเรียน</th>
+                <th data-dt-sort="text">รหัสกลุ่ม</th>
                 <th data-dt-sort="number">รายวิชา</th>
                 <th data-dt-sort="number">ชม./สัปดาห์</th>
                 <th data-dt-sort="number">หน่วยกิต</th>
@@ -492,9 +496,18 @@ if ($minMode === 'required' && $maxMode === 'required') {
         </thead>
         <tbody>
         <?php foreach ($plans as $plan): ?>
-            <?php $planGroups = $plan['groups'] ? implode(', ', $plan['groups']) : '—'; ?>
-            <tr data-dt-row data-search="<?= e(mb_strtolower($plan['name'] . ' ' . $planGroups . ' ' . (string) ($plan['term_label'] ?? ''))) ?>">
+            <?php
+            $planNames = array_map(static fn (array $group): string => (string) $group['name'], $plan['groups']);
+            $planCodes = array_values(array_filter(array_map(
+                static fn (array $group): string => trim((string) ($group['rms_group_code'] ?? '')),
+                $plan['groups']
+            ), static fn (string $code): bool => $code !== ''));
+            $planGroups = $planNames !== [] ? implode(', ', $planNames) : '—';
+            $planCodeText = $planCodes !== [] ? implode(', ', $planCodes) : '—';
+            ?>
+            <tr data-dt-row data-search="<?= e(mb_strtolower($plan['name'] . ' ' . $planGroups . ' ' . $planCodeText . ' ' . (string) ($plan['term_label'] ?? ''))) ?>">
                 <td data-text="<?= e((string) $plan['name']) ?>"><strong><?= e($plan['name']) ?></strong></td>
+                <td class="mono" data-text="<?= e($planCodeText) ?>"><?= e($planCodeText) ?></td>
                 <td data-value="<?= (int) $plan['subject_count'] ?>"><?= (int) $plan['subject_count'] ?></td>
                 <td data-value="<?= (int) $plan['hours_per_week'] ?>"><?= (int) $plan['hours_per_week'] ?></td>
                 <td data-value="<?= (int) $plan['credits'] ?>"><?= (int) $plan['credits'] ?></td>
