@@ -9,12 +9,16 @@
             <div class="day-head" style="grid-row: <?= $index + 2 ?>"><?= e($day) ?></div>
         <?php endforeach; ?>
         <?php foreach ($model['cells'] as $cell): ?>
-            <button class="cell <?= $cell['blocked'] ? 'is-blocked' : '' ?> <?= $cell['picked'] ? 'is-picked' : '' ?> <?= ($cell['twin'] ?? '') !== '' ? 'is-twin' : '' ?>" type="button"
+            <?php $twinMerged = !empty($cell['twin_merged']); ?>
+            <button class="cell <?= $cell['blocked'] ? 'is-blocked' : '' ?> <?= $cell['picked'] ? 'is-picked' : '' ?> <?= ($cell['twin'] ?? '') !== '' && !$twinMerged ? 'is-twin' : '' ?> <?= $twinMerged ? 'is-twin-run' : '' ?>" type="button"
                 style="grid-column: <?= (int) $cell['column'] ?>; grid-row: <?= (int) $cell['row'] ?>"
                 data-day="<?= (int) $cell['day'] ?>" data-period="<?= (int) $cell['period'] ?>" data-blocked="<?= $cell['blocked'] ? '1' : '0' ?>"
                 data-action="pick:<?= (int) $cell['day'] ?>:<?= (int) $cell['period'] ?>"
                 <?= ($cell['twin_title'] ?? '') !== '' ? 'title="' . e((string) $cell['twin_title']) . '"' : '' ?>
-                <?= ($cell['blocked'] || $cell['occupied'] || !$model['can_edit']) ? 'disabled' : '' ?>><?php if (($cell['twin'] ?? '') !== ''): ?><small><?= e((string) $cell['twin']) ?></small><?php endif; ?></button>
+                <?= ($cell['blocked'] || $cell['occupied'] || !$model['can_edit']) ? 'disabled' : '' ?>><?php if (($cell['twin'] ?? '') !== '' && !$twinMerged): ?><small><?= e((string) $cell['twin']) ?></small><?php endif; ?></button>
+        <?php endforeach; ?>
+        <?php foreach ($model['twin_spans'] ?? [] as $span): ?>
+            <div class="twin-span" style="grid-column: <?= e($span['column']) ?>; grid-row: <?= (int) $span['row'] ?>" title="<?= e($span['title']) ?>"><small><?= e($span['label']) ?></small></div>
         <?php endforeach; ?>
         <?php foreach ($model['blocks'] as $block): ?>
             <?php if ($block['lunch']): ?>

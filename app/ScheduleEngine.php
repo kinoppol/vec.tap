@@ -106,6 +106,40 @@ final class ScheduleEngine
         return array_values($merged);
     }
 
+    public static function twinCellSpans(array $cells): array
+    {
+        $spans = [];
+        $count = count($cells);
+        for ($index = 0; $index < $count; $index++) {
+            $label = (string) ($cells[$index]['twin'] ?? '');
+            if ($label === '') {
+                continue;
+            }
+            $span = 1;
+            while (
+                $index + $span < $count
+                && (int) $cells[$index + $span]['day'] === (int) $cells[$index]['day']
+                && (int) $cells[$index + $span]['period'] === (int) $cells[$index]['period'] + $span
+                && (string) ($cells[$index + $span]['twin'] ?? '') === $label
+            ) {
+                $span++;
+            }
+            if ($span > 1) {
+                $spans[] = [
+                    'column' => (int) $cells[$index]['column'] . ' / span ' . $span,
+                    'row' => (int) $cells[$index]['row'],
+                    'label' => $label,
+                    'title' => (string) ($cells[$index]['twin_title'] ?? ''),
+                ];
+                for ($step = 0; $step < $span; $step++) {
+                    $cells[$index + $step]['twin_merged'] = true;
+                }
+            }
+            $index += $span - 1;
+        }
+        return ['cells' => $cells, 'spans' => $spans];
+    }
+
     public static function lunchState(array $policies, string $level): string
     {
         $code = ($level === 'ปวส.' || $level === 'ป.ตรี') ? 'lunch_hvc' : 'lunch_pvc';
@@ -445,6 +479,9 @@ final class ScheduleEngine
                 ];
             }
         }
+        $merged = self::twinCellSpans($cells);
+        $cells = $merged['cells'];
+        $twinSpans = $merged['spans'];
 
         $blocks = [];
         $lunchPeriod = ($level === 'ปวส.' || $level === 'ป.ตรี') ? 5 : 4;
@@ -657,6 +694,7 @@ final class ScheduleEngine
             'placed' => $placed,
             'need' => $need,
             'cells' => $cells,
+            'twin_spans' => $twinSpans,
             'blocks' => $blocks,
             'hours' => $hours,
             'pick' => $pickModel,
