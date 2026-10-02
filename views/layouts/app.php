@@ -69,6 +69,6 @@ $shell = app_shell($currentPage ?? '');
     </div>
 </div>
 <?php require app_root() . '/views/partials/chat.php'; ?>
-<script src="<?= e(url('/assets/js/app.js')) ?>"></script>
+<script src="<?= e(url('/assets/js/app.js')) ?>?v=<?= (int) (@filemtime(app_root() . '/assets/js/app.js') ?: time()) ?>"></script>
 </body>
 </html>

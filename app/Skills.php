@@ -48,6 +48,7 @@ final class Skills
             $loads[] = [
                 'name' => $teacher['name'],
                 'hrs' => $got,
+                'min' => (int) ($teacher['min_hours'] ?? 0),
                 'max' => (int) $teacher['max_hours'],
                 'pct' => (int) min(100, round($ratio * 100)),
                 'bar' => $ratio > 0.85 ? '#E0A526' : '#D63384',

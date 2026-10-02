@@ -3,4 +3,4 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-<link href="<?= e(url('/assets/css/app.css')) ?>" rel="stylesheet">
+<link href="<?= e(url('/assets/css/app.css')) ?>?v=<?= (int) (@filemtime(app_root() . '/assets/css/app.css') ?: time()) ?>" rel="stylesheet">

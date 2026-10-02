@@ -74,6 +74,10 @@ function dispatch(): void
         page_template();
         return;
     }
+    if ($path === '/data/skills-export' && $method === 'GET') {
+        page_teacher_skills_export();
+        return;
+    }
     if ($path === '/rms' && $method === 'GET') {
         page_rms();
         return;
@@ -185,7 +189,8 @@ function page_schedule(): void
 {
     $user = Auth::requireUser();
     $schoolId = SchoolContext::id();
-    $groups = $schoolId > 0 ? Repo::groups($schoolId) : [];
+    $groups = $schoolId > 0 ? ScheduleActions::visibleGroups($schoolId, $user, Repo::groups($schoolId)) : [];
+    $scheduleLimited = !ScheduleActions::seesAllGroups($user);
     $requested = (int) ($_GET['group'] ?? 0);
     $group = null;
     foreach ($groups as $item) {
@@ -200,38 +205,31 @@ function page_schedule(): void
     $model = null;
     if ($group) {
         $_SESSION['schedule_group'] = (int) $group['id'];
-        $subjects = !empty($group['plan_id']) ? Repo::subjectsForPlan($schoolId, (int) $group['plan_id']) : [];
-        $entries = Repo::entries($schoolId, (int) $group['id']);
-        $state = Repo::state((int) $group['id']);
-        $pick = $_SESSION['pick'] ?? null;
-        if (!is_array($pick) || (int) ($pick['group_id'] ?? 0) !== (int) $group['id']) {
-            $pick = null;
-        }
-        $selected = (int) ($_SESSION['selected_entry'] ?? 0);
-        $owns = false;
-        foreach ($entries as $entry) {
-            if ((int) $entry['id'] === $selected) {
-                $owns = true;
-                break;
-            }
-        }
-        $model = ScheduleEngine::present(
-            $group,
-            $subjects,
-            $entries,
-            Repo::policies($schoolId),
-            (string) $state['phase'],
-            $state['applied'] !== null ? (string) $state['applied'] : null,
-            $pick,
-            $owns ? $selected : null,
-            ScheduleActions::canEdit($user)
-        );
+        $model = schedule_board_model($schoolId, $user, $group);
     }
     render('schedule', [
         'currentPage' => 'schedule',
         'groups' => $groups,
+        'scheduleLimited' => $scheduleLimited,
         'model' => $model,
     ]);
+}
+
+function teacher_max_guard(int $schoolId, int $teacherId, int $addedHours): array
+{
+    if ($teacherId <= 0) {
+        return ['block' => null, 'warning' => null];
+    }
+    $teacher = Repo::teacher($schoolId, $teacherId);
+    if ($teacher === null) {
+        return ['block' => null, 'warning' => null];
+    }
+    $modes = ScheduleEngine::teacherHourModes(Repo::policies($schoolId));
+    $next = (Repo::teachingHours($schoolId)[$teacherId] ?? 0) + $addedHours;
+    return [
+        'block' => $addedHours > 0 ? ScheduleEngine::maxHoursBlock($teacher, $next, $modes['max']) : null,
+        'warning' => ScheduleEngine::maxHoursWarning($teacher, $next, $modes['max']),
+    ];
 }
 
 function page_schedule_post(): void
@@ -244,25 +242,39 @@ function page_schedule_post(): void
         flash('ไม่พบกลุ่มผู้เรียนของสถานศึกษานี้', 'err');
         redirect('/schedule');
     }
+    if (!ScheduleActions::canSchedule($user, $schoolId, $groupId)) {
+        if (wants_json()) {
+            schedule_board_json(false, 'ไม่มีสิทธิ์จัดตารางกลุ่มนี้');
+        }
+        flash('ไม่มีสิทธิ์จัดตารางกลุ่มนี้', 'err');
+        redirect('/schedule');
+    }
     $back = '/schedule?group=' . $groupId;
     $action = post_string('action');
     $parts = explode(':', $action);
     $name = $parts[0] ?? '';
     $arg = $parts[1] ?? '';
     $arg2 = $parts[2] ?? '';
-    $editable = ['pick', 'clear_pick', 'add', 'toggle', 'remove', 'reset', 'run', 'apply'];
-    if (in_array($name, $editable, true) && !ScheduleActions::canEdit($user)) {
+    $arg3 = $parts[3] ?? '';
+    $arg4 = $parts[4] ?? '';
+    $ajax = wants_json();
+    $editable = ['pick', 'clear_pick', 'add', 'toggle', 'remove', 'reset', 'run', 'apply', 'move', 'resize', 'assign'];
+    if (in_array($name, $editable, true) && !ScheduleActions::canSchedule($user, $schoolId, $groupId)) {
+        if ($ajax) {
+            schedule_board_json(false, 'บทบาทนี้แก้ไขตารางไม่ได้');
+        }
         flash('บทบาทนี้แก้ไขตารางไม่ได้', 'err');
         redirect($back);
     }
     $subjects = !empty($group['plan_id']) ? Repo::subjectsForPlan($schoolId, (int) $group['plan_id']) : [];
     $entries = Repo::entries($schoolId, $groupId);
+    $lockLunch = ScheduleEngine::lunchState(Repo::policies($schoolId), (string) $group['level']) === 'required';
     try {
         if ($name === 'pick') {
             $day = (int) $arg;
             $period = (int) $arg2;
-            if ($day < 0 || $day > 4 || ScheduleEngine::blocked((string) $group['level'], $period)) {
-                redirect($back);
+            if ($day < 0 || $day > 4 || ScheduleEngine::blocked((string) $group['level'], $period, $lockLunch)) {
+                throw new RuntimeException('ช่องนี้ลงรายวิชาไม่ได้');
             }
             $_SESSION['pick'] = ['group_id' => $groupId, 'day' => $day, 'period' => $period];
             unset($_SESSION['selected_entry']);
@@ -273,23 +285,128 @@ function page_schedule_post(): void
             if (!is_array($pick) || (int) $pick['group_id'] !== $groupId) {
                 throw new RuntimeException('ยังไม่ได้เลือกช่องในตาราง');
             }
-            $next = ScheduleEngine::addManual($subjects, $entries, (int) $arg, (int) $pick['day'], (int) $pick['period'], (string) $group['level']);
+            $next = ScheduleEngine::addManual($subjects, $entries, (int) $arg, (int) $pick['day'], (int) $pick['period'], (string) $group['level'], $lockLunch);
             if ($next === null) {
                 throw new RuntimeException('ลงรายวิชานี้ในช่องนี้ไม่ได้');
+            }
+            $createdIndex = array_key_last($next);
+            $created = $next[$createdIndex];
+            $subject = null;
+            foreach ($subjects as $item) {
+                if ((int) $item['id'] === (int) $created['subject_id']) {
+                    $subject = $item;
+                    break;
+                }
+            }
+            $guard = teacher_max_guard($schoolId, (int) ($subject['teacher_id'] ?? 0), (int) $created['length']);
+            if ($guard['block'] !== null) {
+                throw new RuntimeException($guard['block']);
+            }
+            if ($guard['warning'] !== null) {
+                $next[$createdIndex]['warning'] = $guard['warning'];
             }
             Repo::replaceEntries($schoolId, $groupId, $next);
             Repo::saveState($groupId, 'manual', null);
             unset($_SESSION['pick'], $_SESSION['selected_entry']);
         } elseif ($name === 'select') {
             $entryId = (int) $arg;
+            $found = false;
             foreach ($entries as $entry) {
                 if ((int) $entry['id'] === $entryId) {
                     $_SESSION['selected_entry'] = $entryId;
                     unset($_SESSION['pick']);
-                    redirect($back);
+                    $found = true;
+                    break;
                 }
             }
-            throw new RuntimeException('ไม่พบคาบในตารางนี้');
+            if (!$found) {
+                throw new RuntimeException('ไม่พบคาบในตารางนี้');
+            }
+        } elseif ($name === 'move' || $name === 'resize') {
+            $entryId = (int) $arg;
+            $day = (int) $arg2;
+            $start = (int) $arg3;
+            $current = null;
+            foreach ($entries as $entry) {
+                if ((int) $entry['id'] === $entryId) {
+                    $current = $entry;
+                    break;
+                }
+            }
+            if ($current === null) {
+                throw new RuntimeException('ไม่พบคาบในตารางนี้');
+            }
+            $length = $name === 'resize' ? (int) $arg4 : (int) $current['length_periods'];
+            $error = ScheduleEngine::placementError($subjects, $entries, $entryId, $day, $start, $length, (string) $group['level'], $lockLunch);
+            if ($error !== null) {
+                throw new RuntimeException($error);
+            }
+            $delta = $length - (int) $current['length_periods'];
+            $guard = teacher_max_guard($schoolId, (int) ($current['teacher_id'] ?? 0), $delta);
+            if ($guard['block'] !== null) {
+                throw new RuntimeException($guard['block']);
+            }
+            $warning = $current['warning'] ?? null;
+            if ($guard['warning'] !== null) {
+                $warning = $guard['warning'];
+            } elseif (is_string($warning) && str_starts_with($warning, 'เกินชั่วโมงสูงสุด')) {
+                $warning = null;
+            }
+            $update = Database::pdo()->prepare(
+                'UPDATE timetable_entries
+                 SET day_index = :day_index, start_period = :start_period, length_periods = :length_periods,
+                     is_manual = 1, warning = :warning
+                 WHERE id = :id AND school_id = :school_id AND group_id = :group_id'
+            );
+            $update->bindValue(':day_index', $day, PDO::PARAM_INT);
+            $update->bindValue(':start_period', $start, PDO::PARAM_INT);
+            $update->bindValue(':length_periods', $length, PDO::PARAM_INT);
+            $update->bindValue(':warning', $warning, $warning === null || $warning === '' ? PDO::PARAM_NULL : PDO::PARAM_STR);
+            $update->bindValue(':id', $entryId, PDO::PARAM_INT);
+            $update->bindValue(':school_id', $schoolId, PDO::PARAM_INT);
+            $update->bindValue(':group_id', $groupId, PDO::PARAM_INT);
+            $update->execute();
+            $_SESSION['selected_entry'] = $entryId;
+            unset($_SESSION['pick']);
+        } elseif ($name === 'assign') {
+            $entryId = (int) $arg;
+            $subjectId = 0;
+            foreach ($entries as $entry) {
+                if ((int) $entry['id'] === $entryId) {
+                    $subjectId = (int) $entry['subject_id'];
+                    break;
+                }
+            }
+            if ($subjectId <= 0) {
+                throw new RuntimeException('ไม่พบคาบในตารางนี้');
+            }
+            $teacherId = Repo::ensureTeacherId($schoolId, post_string('teacher_name'));
+            $oldTeacher = 0;
+            foreach ($subjects as $item) {
+                if ((int) $item['id'] === $subjectId) {
+                    $oldTeacher = (int) ($item['teacher_id'] ?? 0);
+                    break;
+                }
+            }
+            $placed = Repo::placedHours($schoolId, $subjectId);
+            if ($teacherId !== null && $teacherId !== $oldTeacher && $placed > 0) {
+                $guard = teacher_max_guard($schoolId, $teacherId, $placed);
+                if ($guard['block'] !== null) {
+                    throw new RuntimeException($guard['block']);
+                }
+            }
+            $roomId = Repo::ensureRoomId($schoolId, post_string('room_code'));
+            $update = Database::pdo()->prepare(
+                'UPDATE subjects SET teacher_id = :teacher_id, room_id = :room_id
+                 WHERE id = :id AND school_id = :school_id'
+            );
+            $update->bindValue(':teacher_id', $teacherId, $teacherId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+            $update->bindValue(':room_id', $roomId, $roomId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+            $update->bindValue(':id', $subjectId, PDO::PARAM_INT);
+            $update->bindValue(':school_id', $schoolId, PDO::PARAM_INT);
+            $update->execute();
+            $_SESSION['selected_entry'] = $entryId;
+            unset($_SESSION['pick']);
         } elseif ($name === 'clear_select') {
             unset($_SESSION['selected_entry']);
         } elseif ($name === 'toggle') {
@@ -337,9 +454,74 @@ function page_schedule_post(): void
             unset($_SESSION['pick'], $_SESSION['selected_entry']);
         }
     } catch (RuntimeException $exception) {
+        if ($ajax) {
+            schedule_board_json(false, $exception->getMessage());
+        }
         flash($exception->getMessage(), 'err');
     }
+    if ($ajax) {
+        $group = Repo::group($schoolId, $groupId);
+        schedule_board_json(true, '', $group ? schedule_board_html($schoolId, $user, $group) : '');
+    }
     redirect($back);
+}
+
+function schedule_board_model(int $schoolId, array $user, array $group): array
+{
+    Repo::mergeConsecutive($schoolId, (int) $group['id']);
+    $subjects = !empty($group['plan_id']) ? Repo::subjectsForPlan($schoolId, (int) $group['plan_id']) : [];
+    $entries = Repo::entries($schoolId, (int) $group['id']);
+    $state = Repo::state((int) $group['id']);
+    $pick = $_SESSION['pick'] ?? null;
+    if (!is_array($pick) || (int) ($pick['group_id'] ?? 0) !== (int) $group['id']) {
+        $pick = null;
+    }
+    $selected = (int) ($_SESSION['selected_entry'] ?? 0);
+    $owns = false;
+    foreach ($entries as $entry) {
+        if ((int) $entry['id'] === $selected) {
+            $owns = true;
+            break;
+        }
+    }
+    $teachers = Repo::teachers($schoolId);
+    $model = ScheduleEngine::present(
+        $group,
+        $subjects,
+        $entries,
+        Repo::policies($schoolId),
+        (string) $state['phase'],
+        $state['applied'] !== null ? (string) $state['applied'] : null,
+        $pick,
+        $owns ? $selected : null,
+        ScheduleActions::canSchedule($user, $schoolId, (int) $group['id']),
+        $teachers,
+        Repo::teachingHours($schoolId)
+    );
+    $model['teacher_names'] = array_map(
+        static fn (array $teacher): string => (string) $teacher['name'],
+        $teachers
+    );
+    $model['room_codes'] = array_map(
+        static fn (array $room): string => (string) $room['code'],
+        Repo::rooms($schoolId)
+    );
+    return $model;
+}
+
+function schedule_board_html(int $schoolId, array $user, array $group): string
+{
+    $model = schedule_board_model($schoolId, $user, $group);
+    ob_start();
+    require app_root() . '/views/partials/schedule_board.php';
+    return (string) ob_get_clean();
+}
+
+function schedule_board_json(bool $ok, string $message, string $html = ''): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['ok' => $ok, 'message' => $message, 'html' => $html], JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 function page_policies(): void
@@ -453,7 +635,7 @@ function page_skills_post(): void
 
 function page_data(): void
 {
-    Auth::requireUser();
+    $user = Auth::requireUser();
     $schoolId = SchoolContext::id();
     $tab = (string) ($_GET['tab'] ?? 'teachers');
     if (!in_array($tab, ['teachers', 'groups', 'plans', 'subjects', 'rooms'], true)) {
@@ -462,7 +644,13 @@ function page_data(): void
     render('data', [
         'currentPage' => 'data',
         'tab' => $tab,
+        'canEdit' => ScheduleActions::canEdit($user) && $schoolId > 0,
+        'canAssign' => in_array($user['role'], ['superadmin', 'school_admin'], true) && $schoolId > 0,
         'teachers' => $schoolId > 0 ? Repo::teachers($schoolId) : [],
+        'teacherAccounts' => $schoolId > 0 ? Repo::teacherAccounts($schoolId) : [],
+        'schedulers' => $schoolId > 0 ? Repo::groupSchedulers($schoolId) : [],
+        'teachingHours' => $schoolId > 0 ? Repo::teachingHours($schoolId) : [],
+        'hourModes' => ScheduleEngine::teacherHourModes($schoolId > 0 ? Repo::policies($schoolId) : []),
         'groups' => $schoolId > 0 ? Repo::groups($schoolId) : [],
         'plans' => $schoolId > 0 ? Repo::plans($schoolId) : [],
         'subjects' => $schoolId > 0 ? Repo::subjects($schoolId) : [],
@@ -485,9 +673,20 @@ function page_template(): void
             ['20000-1101', 'ภาษาไทยเพื่ออาชีพ', '1', '0', '1', 'ปวช. เทคโนโลยีสารสนเทศ ชั้นปีที่ 1'],
         ], 'subjects.csv');
     }
-    Spreadsheet::csvDownload(['ชื่อ', 'แผนก', 'วุฒิ', 'ทักษะ', 'ชมสูงสุด'], [
-        ['ครูตัวอย่าง', 'เทคโนโลยีสารสนเทศ', 'ป.ตรี', 'Python|Network', '18'],
+    Spreadsheet::csvDownload(['ชื่อ', 'แผนก', 'วุฒิ', 'ทักษะ', 'ชมสูงสุด', 'ชมต่ำสุด'], [
+        ['ครูตัวอย่าง', 'เทคโนโลยีสารสนเทศ', 'ป.ตรี', 'Python|Network', '18', '12'],
     ], 'teachers.csv');
+}
+
+function page_teacher_skills_export(): void
+{
+    Auth::requireUser();
+    $schoolId = SchoolContext::id();
+    if ($schoolId <= 0) {
+        flash('ยังไม่มีสถานศึกษาสำหรับส่งออกทักษะ', 'err');
+        redirect('/data?tab=teachers');
+    }
+    Spreadsheet::csvDownload(['ชื่อ', 'ทักษะ'], Repo::teacherSkillExportRows($schoolId), 'teacher-skills.csv');
 }
 
 function page_rms(): void
@@ -495,7 +694,7 @@ function page_rms(): void
     $user = Auth::requireRole(['superadmin', 'school_admin', 'scheduler']);
     $schoolId = SchoolContext::id();
     $resource = (string) ($_GET['view'] ?? 'students');
-    if (!in_array($resource, ['students', 'groups', 'plans', 'holidays', 'schedules'], true)) {
+    if (!in_array($resource, ['students', 'groups', 'plans', 'catalog', 'curricula', 'timetables', 'blocks', 'enrollments', 'holidays', 'schedules'], true)) {
         $resource = 'students';
     }
     render('rms', [
@@ -532,7 +731,11 @@ function page_rms_post(): void
             redirect('/rms');
         }
         if ($action === 'count') {
-            rms_ok(['total' => Rms::countStudents($schoolId)]);
+            $dataset = post_string('dataset');
+            if ($dataset === '') {
+                $dataset = 'students';
+            }
+            rms_ok(['total' => Rms::remoteCount($schoolId, $dataset)]);
         }
         if ($action === 'sync' || $action === 'sync_batch') {
             $dataset = post_string('dataset');
@@ -570,8 +773,155 @@ function rms_fail(string $message): void
 
 function page_data_post(): void
 {
-    Auth::requireUser();
+    $user = Auth::requireUser();
     $schoolId = SchoolContext::id();
+    $action = post_string('action');
+    if ($action === 'add_building' || $action === 'add_room' || $action === 'set_point') {
+        if (!ScheduleActions::canEdit($user) || $schoolId <= 0) {
+            if ($action === 'set_point' && wants_json()) {
+                http_response_code(403);
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['ok' => false, 'message' => 'บทบาทนี้แก้พิกัดอาคารไม่ได้'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            flash('บทบาทนี้เพิ่มอาคารหรือห้องเรียนไม่ได้', 'err');
+            redirect('/data?tab=rooms');
+        }
+        try {
+            if ($action === 'set_point') {
+                Repo::setBuildingPoint($schoolId, (int) post_string('building_id'), post_string('lat'), post_string('lng'));
+                if (wants_json()) {
+                    header('Content-Type: application/json; charset=UTF-8');
+                    echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+                flash('บันทึกพิกัดอาคารแล้ว');
+            } elseif ($action === 'add_building') {
+                Repo::addBuilding(
+                    $schoolId,
+                    post_string('name'),
+                    post_string('short_name'),
+                    post_string('campus'),
+                    post_string('dist_label'),
+                    post_string('lat'),
+                    post_string('lng')
+                );
+                flash('เพิ่มอาคารเรียนแล้ว');
+            } else {
+                Repo::addRoom(
+                    $schoolId,
+                    post_string('code'),
+                    (int) post_string('building_id'),
+                    post_string('room_type'),
+                    (int) post_string('capacity')
+                );
+                flash('เพิ่มห้องเรียนแล้ว');
+            }
+        } catch (Throwable $exception) {
+            $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'บันทึกไม่สำเร็จ';
+            if ($action === 'set_point' && wants_json()) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=UTF-8');
+                echo json_encode(['ok' => false, 'message' => $message], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            flash($message, 'err');
+        }
+        redirect('/data?tab=rooms');
+    }
+    if ($action === 'add_skill' || $action === 'remove_skill') {
+        if (!ScheduleActions::canEdit($user) || $schoolId <= 0) {
+            flash('บทบาทนี้แก้ทักษะการสอนไม่ได้', 'err');
+            redirect('/data?tab=teachers');
+        }
+        try {
+            $teacherId = (int) post_string('teacher_id');
+            if ($action === 'add_skill') {
+                Repo::addTeacherSkill($schoolId, $teacherId, post_string('skill'));
+                flash('เพิ่มทักษะการสอนแล้ว');
+            } else {
+                Repo::removeTeacherSkill($schoolId, $teacherId, post_string('skill'));
+                flash('ลบทักษะการสอนแล้ว');
+            }
+        } catch (Throwable $exception) {
+            $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'บันทึกทักษะไม่สำเร็จ';
+            flash($message, 'err');
+        }
+        redirect('/data?tab=teachers');
+    }
+    if ($action === 'set_hours') {
+        if (!ScheduleActions::canEdit($user) || $schoolId <= 0) {
+            flash('บทบาทนี้แก้ชั่วโมงสอนของครูไม่ได้', 'err');
+            redirect('/data?tab=teachers');
+        }
+        try {
+            Repo::setTeacherHours(
+                $schoolId,
+                (int) post_string('teacher_id'),
+                (int) post_string('min_hours'),
+                (int) post_string('max_hours')
+            );
+            flash('บันทึกชั่วโมงสอนของครูแล้ว');
+        } catch (Throwable $exception) {
+            $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'บันทึกชั่วโมงไม่สำเร็จ';
+            flash($message, 'err');
+        }
+        redirect('/data?tab=teachers');
+    }
+    if ($action === 'assign_scheduler' || $action === 'remove_scheduler') {
+        if (!in_array($user['role'], ['superadmin', 'school_admin'], true) || $schoolId <= 0) {
+            flash('เฉพาะผู้ดูแลสถานศึกษามอบหมายผู้จัดตารางได้', 'err');
+            redirect('/data?tab=groups');
+        }
+        try {
+            $groupId = (int) post_string('group_id');
+            $teacherId = (int) post_string('teacher_id');
+            if ($action === 'assign_scheduler') {
+                Repo::assignGroupScheduler($schoolId, $groupId, $teacherId);
+                flash('มอบหมายผู้จัดตารางแล้ว');
+            } else {
+                Repo::removeGroupScheduler($schoolId, $groupId, $teacherId);
+                flash('ยกเลิกการมอบหมายแล้ว');
+            }
+        } catch (Throwable $exception) {
+            $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'บันทึกการมอบหมายไม่สำเร็จ';
+            flash($message, 'err');
+        }
+        redirect('/data?tab=groups');
+    }
+    if ($action === 'create_teacher_user') {
+        if (!in_array($user['role'], ['superadmin', 'school_admin'], true) || $schoolId <= 0) {
+            flash('เฉพาะผู้ดูแลสถานศึกษาสร้างบัญชีจากข้อมูลครูได้', 'err');
+            redirect('/data?tab=teachers');
+        }
+        try {
+            Repo::createTeacherUser(
+                $schoolId,
+                (int) post_string('teacher_id'),
+                (string) ($_POST['password'] ?? ''),
+                post_string('citizen_id')
+            );
+            flash('สร้างบัญชีครูแล้ว จัดตารางได้เฉพาะกลุ่มที่มอบหมายไว้');
+        } catch (Throwable $exception) {
+            $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'สร้างบัญชีไม่สำเร็จ';
+            flash($message, 'err');
+        }
+        redirect('/data?tab=teachers');
+    }
+    if ($action === 'import_skills') {
+        if (!ScheduleActions::canEdit($user) || $schoolId <= 0) {
+            flash('บทบาทนี้นำเข้าทักษะครูไม่ได้', 'err');
+            redirect('/data?tab=teachers');
+        }
+        try {
+            $count = Repo::importTeacherSkillRows($schoolId, uploaded_rows());
+            flash('นำเข้าทักษะของครู ' . $count . ' คนแล้ว');
+        } catch (Throwable $exception) {
+            $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'นำเข้าทักษะไม่สำเร็จ';
+            flash($message, 'err');
+        }
+        redirect('/data?tab=teachers');
+    }
     $tab = post_string('tab');
     if (!in_array($tab, ['teachers', 'groups', 'subjects'], true)) {
         flash('นำเข้าได้เฉพาะครู กลุ่มผู้เรียน และรายวิชา', 'err');
@@ -901,7 +1251,8 @@ function import_teachers(int $schoolId, array $rows): int
     }
     $pdo = Database::pdo();
     $insert = $pdo->prepare(
-        'INSERT INTO teachers (school_id, name, dept, degree, max_hours) VALUES (:school_id, :name, :dept, :degree, :max_hours)'
+        'INSERT INTO teachers (school_id, name, dept, degree, max_hours, min_hours)
+         VALUES (:school_id, :name, :dept, :degree, :max_hours, :min_hours)'
     );
     $skill = $pdo->prepare('INSERT INTO teacher_skills (teacher_id, skill) VALUES (:teacher_id, :skill)');
     $count = 0;
@@ -910,12 +1261,15 @@ function import_teachers(int $schoolId, array $rows): int
         if ($name === '') {
             continue;
         }
+        $maxHours = max(1, (int) ($row[4] ?? 18));
+        $minHours = min($maxHours, max(0, (int) ($row[5] ?? 0)));
         $insert->execute([
             'school_id' => $schoolId,
             'name' => $name,
             'dept' => trim((string) ($row[1] ?? '')),
             'degree' => trim((string) ($row[2] ?? '')),
-            'max_hours' => max(1, (int) ($row[4] ?? 18)),
+            'max_hours' => $maxHours,
+            'min_hours' => $minHours,
         ]);
         $teacherId = (int) $pdo->lastInsertId();
         foreach (preg_split('/[|,]/', (string) ($row[3] ?? '')) ?: [] as $item) {

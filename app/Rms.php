@@ -9,7 +9,15 @@ final class Rms
         'holidays' => 'stopday',
         'groups' => 'std2018_studentgroup',
         'plans' => 'std2018_curi_plan',
+        'majors' => 'std2018_major',
+        'minors' => 'std2018_minor',
+        'subjecttypes' => 'std2018_subjecttype',
+        'curricula' => 'std2018_curriculum',
+        'catalog' => 'subject',
         'students' => 'std2018_student',
+        'enrollments' => 'std2018_studentenroll',
+        'timetables' => 'std2018_timetable',
+        'blocks' => 'std2018_timetable_blockcourse',
         'schedules' => 'studing',
     ];
 
@@ -44,7 +52,7 @@ final class Rms
         }
         $query = 'data=' . rawurlencode(self::DATASETS[$dataset]);
         foreach ($params as $key => $value) {
-            if (!in_array($key, ['count', 'limit', 'semes'], true)) {
+            if (!in_array($key, ['count', 'limit', 'semes', 'academicYear', 'semester', 'timeTableID'], true)) {
                 continue;
             }
             $query .= '&' . $key . '=' . rawurlencode((string) $value);
@@ -76,7 +84,15 @@ final class Rms
 
     public static function countStudents(int $schoolId): int
     {
-        $rows = self::fetch($schoolId, 'students', ['count' => 'yes']);
+        return self::remoteCount($schoolId, 'students');
+    }
+
+    public static function remoteCount(int $schoolId, string $dataset): int
+    {
+        if (!isset(self::DATASETS[$dataset])) {
+            throw new RuntimeException('ชุดข้อมูลไม่ถูกต้อง');
+        }
+        $rows = self::fetch($schoolId, $dataset, ['count' => 'yes']);
         $first = $rows[0] ?? [];
         return (int) ($first['c'] ?? $first['count'] ?? 0);
     }
@@ -91,7 +107,15 @@ final class Rms
             'holidays' => self::syncHolidays($schoolId),
             'groups' => self::syncGroups($schoolId),
             'plans' => self::syncPlans($schoolId, $offset, $row),
+            'majors' => self::syncDictionary($schoolId, 'majors', 'rms_majors', 'major_id', ['majorID'], ['majorCode'], ['majorNameTh', 'majorName'], ['majorNameEn']),
+            'minors' => self::syncDictionary($schoolId, 'minors', 'rms_minors', 'minor_id', ['minorID'], ['minorCode'], ['minorNameTh', 'minorName'], ['minorNameEn']),
+            'subjecttypes' => self::syncDictionary($schoolId, 'subjecttypes', 'rms_subject_types', 'subject_type_id', ['subjectTypeID'], ['subjectTypeCode'], ['subjectTypeNameTh', 'subjectTypeName'], ['subjectTypeNameEn']),
+            'curricula' => self::syncCurricula($schoolId),
+            'catalog' => self::syncCatalog($schoolId, $offset, $row),
             'students' => self::syncStudents($schoolId, $offset, $row),
+            'enrollments' => self::syncEnrollments($schoolId, $offset, $row),
+            'timetables' => self::syncTimetables($schoolId, $offset, $row),
+            'blocks' => self::syncBlocks($schoolId, $offset, $row),
             'schedules' => self::syncSchedules($schoolId, $offset, $row),
             default => throw new RuntimeException('ชุดข้อมูลไม่ถูกต้อง'),
         };
@@ -133,7 +157,15 @@ final class Rms
             'holidays' => $one('SELECT COUNT(*) FROM holidays WHERE school_id = :school_id'),
             'groups' => $one('SELECT COUNT(*) FROM student_groups WHERE school_id = :school_id AND rms_group_code IS NOT NULL'),
             'plans' => $one('SELECT COUNT(*) FROM study_plans WHERE school_id = :school_id AND rms_key IS NOT NULL'),
+            'majors' => $one('SELECT COUNT(*) FROM rms_majors WHERE school_id = :school_id'),
+            'minors' => $one('SELECT COUNT(*) FROM rms_minors WHERE school_id = :school_id'),
+            'subjecttypes' => $one('SELECT COUNT(*) FROM rms_subject_types WHERE school_id = :school_id'),
+            'curricula' => $one('SELECT COUNT(*) FROM rms_curricula WHERE school_id = :school_id'),
+            'catalog' => $one('SELECT COUNT(*) FROM rms_subject_catalog WHERE school_id = :school_id'),
             'students' => $one('SELECT COUNT(*) FROM students WHERE school_id = :school_id'),
+            'enrollments' => $one('SELECT COUNT(*) FROM rms_enrollments WHERE school_id = :school_id'),
+            'timetables' => $one('SELECT COUNT(*) FROM rms_timetables WHERE school_id = :school_id'),
+            'blocks' => $one('SELECT COUNT(*) FROM rms_blockcourses WHERE school_id = :school_id'),
             'schedules' => $one('SELECT COUNT(*) FROM rms_schedules WHERE school_id = :school_id'),
         ];
     }
@@ -160,6 +192,37 @@ final class Rms
                 'where' => 'p.school_id = :school_id AND p.rms_key IS NOT NULL',
                 'search' => ['p.name', 's.code', 's.name', 't.label'],
                 'order' => 't.id DESC, p.name, s.code',
+            ],
+            'catalog' => [
+                'select' => 'code, name',
+                'from' => 'rms_subject_catalog',
+                'search' => ['code', 'name'],
+                'order' => 'code',
+            ],
+            'curricula' => [
+                'select' => 'c.curriculum_year AS curriculum_year, t.name_th AS subject_type, m.name_th AS major_name, n.name_th AS minor_name',
+                'from' => 'rms_curricula c LEFT JOIN rms_subject_types t ON t.school_id = c.school_id AND t.subject_type_id = c.subject_type_id LEFT JOIN rms_majors m ON m.school_id = c.school_id AND m.major_id = c.major_id LEFT JOIN rms_minors n ON n.school_id = c.school_id AND n.minor_id = c.minor_id',
+                'where' => 'c.school_id = :school_id',
+                'search' => ['c.curriculum_year', 't.name_th', 'm.name_th', 'n.name_th'],
+                'order' => 'c.curriculum_year, m.name_th',
+            ],
+            'timetables' => [
+                'select' => 'term_key, group_code, subject_code, subject_name, teacher_name, day_code, time_from_name, time_to_name, room_name, building_name',
+                'from' => 'rms_timetables',
+                'search' => ['group_code', 'subject_code', 'subject_name', 'teacher_name', 'room_name', 'building_name'],
+                'order' => 'term_key, group_code, day_code, time_from_name',
+            ],
+            'blocks' => [
+                'select' => 'term_key, group_code, day_code, time_from_name, time_to_name, teacher_id, timetable_id',
+                'from' => 'rms_blockcourses',
+                'search' => ['group_code', 'teacher_id', 'timetable_id'],
+                'order' => 'term_key, group_code, day_code',
+            ],
+            'enrollments' => [
+                'select' => 'term_key, student_code, firstname, surname, timetable_id',
+                'from' => 'rms_enrollments',
+                'search' => ['student_code', 'firstname', 'surname', 'timetable_id'],
+                'order' => 'term_key, surname, firstname',
             ],
             'holidays' => [
                 'select' => 'h.name AS name, h.holiday_date AS holiday_date, t.label AS term_label',
@@ -531,7 +594,7 @@ final class Rms
                 continue;
             }
             $code = self::field($row, ['subjectCode', 'subject_code', 'real_subject_id', 'subject_id', 'subjCode', 'curiCode', 'courseCode', 'รหัสวิชา']);
-            $name = self::field($row, ['subjectName', 'subject_name', 'subjName', 'curiName', 'courseName', 'ชื่อวิชา']);
+            $name = self::field($row, ['subjectNameTh', 'subjectName', 'subject_name', 'subjName', 'curiName', 'courseName', 'ชื่อวิชา']);
             if ($code === '' || $name === '') {
                 $skipped++;
                 continue;
@@ -539,7 +602,7 @@ final class Rms
             $code = mb_substr($code, 0, 32);
             $name = mb_substr($name, 0, 255);
             [$theory, $practice, $extra] = self::subjectHours($row);
-            $groupCode = self::field($row, ['groupCode', 'group_code', 'student_group_id', 'studentGroupId', 'groupId', 'รหัสกลุ่ม']);
+            $groupCode = self::field($row, ['GroupCode', 'groupCode', 'group_code', 'student_group_id', 'studentGroupId', 'groupId', 'รหัสกลุ่ม']);
             $planCode = self::field($row, ['planCode', 'plan_code', 'curiPlanCode', 'curriculumCode', 'รหัสแผน']);
             $planName = self::field($row, ['planName', 'plan_name', 'curiPlanName', 'curriculumName', 'majorName', 'majorNameTh', 'ชื่อแผน']);
             $termId = self::ensureTerm($schoolId, $termKey);
@@ -768,7 +831,7 @@ final class Rms
         return ['semes' => $semes, 'inserted' => $inserted, 'placed' => $placed, 'skipped' => $skipped, 'fetched' => count($rows)];
     }
 
-    private static function placeSchedule(int $schoolId, array $term, array $row, ?int $periods): bool
+    private static function placeSchedule(int $schoolId, array $term, array $row, ?int $periods, string $source = 'rms'): bool
     {
         $day = self::dayIndex((string) ($row['dpr2'] ?? ''));
         $span = self::periodSpan((string) ($row['dpr3'] ?? ''), $periods);
@@ -804,18 +867,7 @@ final class Rms
         $subject = $pdo->prepare('SELECT id, theory FROM subjects WHERE school_id = :school_id AND plan_id = :plan_id AND code = :code LIMIT 1');
         $subject->execute(['school_id' => $schoolId, 'plan_id' => $planId, 'code' => $code]);
         $subjectRow = $subject->fetch();
-        $exists = $pdo->prepare(
-            'SELECT id FROM timetable_entries WHERE school_id = :school_id AND group_id = :group_id AND day_index = :day_index AND start_period = :start_period LIMIT 1'
-        );
-        $exists->execute([
-            'school_id' => $schoolId,
-            'group_id' => (int) $groupRow['id'],
-            'day_index' => $day,
-            'start_period' => $span[0],
-        ]);
-        if ($exists->fetchColumn()) {
-            return true;
-        }
+        $groupId = (int) $groupRow['id'];
         if ($subjectRow) {
             $subjectId = (int) $subjectRow['id'];
             if ($keepCurriculumHours) {
@@ -858,19 +910,425 @@ final class Rms
             $subjectId = (int) $pdo->lastInsertId();
         }
         $pdo->prepare('UPDATE student_groups SET plan_id = :plan_id WHERE id = :id AND school_id = :school_id AND plan_id IS NULL')
-            ->execute(['plan_id' => $planId, 'id' => (int) $groupRow['id'], 'school_id' => $schoolId]);
-        $pdo->prepare(
-            'INSERT INTO timetable_entries (school_id, group_id, subject_id, day_index, start_period, length_periods, is_manual, source)
-             VALUES (:school_id, :group_id, :subject_id, :day_index, :start_period, :length_periods, 1, \'rms\')'
-        )->execute([
+            ->execute(['plan_id' => $planId, 'id' => $groupId, 'school_id' => $schoolId]);
+        $start = $span[0];
+        $end = $start + $span[1] - 1;
+        $neighbors = $pdo->prepare(
+            'SELECT id, start_period, length_periods FROM timetable_entries
+             WHERE school_id = :school_id AND group_id = :group_id AND subject_id = :subject_id AND day_index = :day_index
+               AND start_period <= :touch_end AND start_period + length_periods >= :touch_start
+             ORDER BY start_period, id'
+        );
+        $neighbors->execute([
             'school_id' => $schoolId,
-            'group_id' => (int) $groupRow['id'],
+            'group_id' => $groupId,
             'subject_id' => $subjectId,
             'day_index' => $day,
-            'start_period' => $span[0],
+            'touch_end' => $end + 1,
+            'touch_start' => $start,
+        ]);
+        $found = $neighbors->fetchAll();
+        if ($found !== []) {
+            $keepId = (int) $found[0]['id'];
+            $mergedStart = $start;
+            $mergedEnd = $end;
+            foreach ($found as $neighbor) {
+                $neighborStart = (int) $neighbor['start_period'];
+                $neighborEnd = $neighborStart + (int) $neighbor['length_periods'] - 1;
+                $mergedStart = min($mergedStart, $neighborStart);
+                $mergedEnd = max($mergedEnd, $neighborEnd);
+                if ((int) $neighbor['id'] !== $keepId) {
+                    $pdo->prepare('DELETE FROM timetable_entries WHERE id = :id AND school_id = :school_id')
+                        ->execute(['id' => (int) $neighbor['id'], 'school_id' => $schoolId]);
+                }
+            }
+            $pdo->prepare(
+                'UPDATE timetable_entries SET start_period = :start_period, length_periods = :length_periods
+                 WHERE id = :id AND school_id = :school_id'
+            )->execute([
+                'start_period' => $mergedStart,
+                'length_periods' => $mergedEnd - $mergedStart + 1,
+                'id' => $keepId,
+                'school_id' => $schoolId,
+            ]);
+            return true;
+        }
+        $pdo->prepare(
+            'INSERT INTO timetable_entries (school_id, group_id, subject_id, day_index, start_period, length_periods, is_manual, source)
+             VALUES (:school_id, :group_id, :subject_id, :day_index, :start_period, :length_periods, 1, :source)'
+        )->execute([
+            'school_id' => $schoolId,
+            'group_id' => $groupId,
+            'subject_id' => $subjectId,
+            'day_index' => $day,
+            'start_period' => $start,
             'length_periods' => $span[1],
+            'source' => $source === 'std' ? 'std' : 'rms',
         ]);
         return true;
+    }
+
+    private static function syncDictionary(int $schoolId, string $dataset, string $table, string $idColumn, array $idKeys, array $codeKeys, array $nameKeys, array $englishKeys): array
+    {
+        $rows = self::fetch($schoolId, $dataset);
+        $pdo = Database::pdo();
+        $pdo->prepare('DELETE FROM ' . $table . ' WHERE school_id = :school_id')->execute(['school_id' => $schoolId]);
+        $insert = $pdo->prepare(
+            'INSERT INTO ' . $table . ' (school_id, ' . $idColumn . ', code, name_th, name_en)
+             VALUES (:school_id, :item_id, :code, :name_th, :name_en)'
+        );
+        $added = 0;
+        $skipped = 0;
+        $seen = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                $skipped++;
+                continue;
+            }
+            $itemId = self::field($row, $idKeys);
+            $name = self::field($row, $nameKeys);
+            if ($itemId === '' || $name === '' || isset($seen[$itemId])) {
+                $skipped++;
+                continue;
+            }
+            $seen[$itemId] = true;
+            $insert->execute([
+                'school_id' => $schoolId,
+                'item_id' => mb_substr($itemId, 0, 30),
+                'code' => self::nullable(self::field($row, $codeKeys), 40),
+                'name_th' => mb_substr($name, 0, 255),
+                'name_en' => self::nullable(self::field($row, $englishKeys), 255),
+            ]);
+            $added++;
+        }
+        return ['added' => $added, 'skipped' => $skipped, 'fetched' => count($rows)];
+    }
+
+    private static function syncCurricula(int $schoolId): array
+    {
+        $rows = self::fetch($schoolId, 'curricula');
+        $pdo = Database::pdo();
+        $pdo->prepare('DELETE FROM rms_curricula WHERE school_id = :school_id')->execute(['school_id' => $schoolId]);
+        $insert = $pdo->prepare(
+            'INSERT INTO rms_curricula (school_id, curriculum_year, degree_level_id, subject_type_id, major_id, minor_id)
+             VALUES (:school_id, :curriculum_year, :degree_level_id, :subject_type_id, :major_id, :minor_id)
+             ON DUPLICATE KEY UPDATE curriculum_year = VALUES(curriculum_year)'
+        );
+        $added = 0;
+        $skipped = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                $skipped++;
+                continue;
+            }
+            $year = self::field($row, ['curriculumYear', 'curriculum_year']);
+            if ($year === '') {
+                $skipped++;
+                continue;
+            }
+            $insert->execute([
+                'school_id' => $schoolId,
+                'curriculum_year' => mb_substr($year, 0, 10),
+                'degree_level_id' => mb_substr(self::field($row, ['degreeLevelID', 'degree_level_id']), 0, 20),
+                'subject_type_id' => mb_substr(self::field($row, ['subjectTypeID', 'subject_type_id']), 0, 30),
+                'major_id' => mb_substr(self::field($row, ['majorID', 'major_id']), 0, 30),
+                'minor_id' => mb_substr(self::field($row, ['minorID', 'minor_id']), 0, 30),
+            ]);
+            $added++;
+        }
+        return ['added' => $added, 'skipped' => $skipped, 'fetched' => count($rows)];
+    }
+
+    private static function syncCatalog(int $schoolId, int $offset, int $row): array
+    {
+        $rows = self::fetch($schoolId, 'catalog', ['limit' => $offset . ',' . $row]);
+        $pdo = Database::pdo();
+        if ($offset === 0) {
+            $pdo->prepare('DELETE FROM rms_subject_catalog WHERE school_id = :school_id')->execute(['school_id' => $schoolId]);
+        }
+        $insert = $pdo->prepare(
+            'INSERT INTO rms_subject_catalog (school_id, code, name) VALUES (:school_id, :code, :name)
+             ON DUPLICATE KEY UPDATE name = VALUES(name)'
+        );
+        $added = 0;
+        $skipped = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                $skipped++;
+                continue;
+            }
+            $code = self::field($row, ['subject_id', 'subjectID', 'subjectCode']);
+            $name = self::field($row, ['subject_name', 'subjectName', 'subjectNameTh']);
+            if ($code === '' || $name === '') {
+                $skipped++;
+                continue;
+            }
+            $insert->execute([
+                'school_id' => $schoolId,
+                'code' => mb_substr($code, 0, 50),
+                'name' => mb_substr($name, 0, 255),
+            ]);
+            $added++;
+        }
+        return ['added' => $added, 'skipped' => $skipped, 'fetched' => count($rows)];
+    }
+
+    private static function syncEnrollments(int $schoolId, int $offset, int $row): array
+    {
+        $rows = self::fetch($schoolId, 'enrollments', ['limit' => $offset . ',' . $row]);
+        $pdo = Database::pdo();
+        if ($offset === 0) {
+            $pdo->prepare('DELETE FROM rms_enrollments WHERE school_id = :school_id')->execute(['school_id' => $schoolId]);
+        }
+        $insert = $pdo->prepare(
+            'INSERT INTO rms_enrollments (school_id, term_key, enroll_id, student_code, firstname, surname, idcard, timetable_id)
+             VALUES (:school_id, :term_key, :enroll_id, :student_code, :firstname, :surname, :idcard, :timetable_id)'
+        );
+        $added = 0;
+        $skipped = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                $skipped++;
+                continue;
+            }
+            $termKey = self::termKey($row);
+            $studentCode = self::field($row, ['studentCode', 'student_code', 'studentID']);
+            if ($termKey === '' || $studentCode === '') {
+                $skipped++;
+                continue;
+            }
+            $insert->execute([
+                'school_id' => $schoolId,
+                'term_key' => $termKey,
+                'enroll_id' => self::nullable(self::field($row, ['enrollID', 'enroll_id']), 40),
+                'student_code' => mb_substr($studentCode, 0, 30),
+                'firstname' => self::nullable(self::field($row, ['firstname', 'firstName']), 100),
+                'surname' => self::nullable(self::field($row, ['surname', 'lastName']), 100),
+                'idcard' => self::nullable(self::field($row, ['idcard', 'idCard']), 20),
+                'timetable_id' => self::nullable(self::field($row, ['timeTableID', 'timetable_id']), 40),
+            ]);
+            $added++;
+        }
+        return ['added' => $added, 'skipped' => $skipped, 'fetched' => count($rows)];
+    }
+
+    private static function syncTimetables(int $schoolId, int $offset, int $row): array
+    {
+        $rows = self::fetch($schoolId, 'timetables', ['limit' => $offset . ',' . $row]);
+        $pdo = Database::pdo();
+        if ($offset === 0) {
+            $pdo->prepare('DELETE FROM rms_timetables WHERE school_id = :school_id')->execute(['school_id' => $schoolId]);
+            $pdo->prepare('DELETE FROM timetable_entries WHERE school_id = :school_id AND source = \'std\'')
+                ->execute(['school_id' => $schoolId]);
+        }
+        $insert = $pdo->prepare(
+            'INSERT INTO rms_timetables (
+                school_id, term_key, group_code, subject_code, subject_name, building_name, room_name, day_code,
+                time_from_name, time_to_name, teacher_id, teacher_name, teacher_type, timetable_type,
+                timetable_id, timetable_sub_id, class_room_extra
+             ) VALUES (
+                :school_id, :term_key, :group_code, :subject_code, :subject_name, :building_name, :room_name, :day_code,
+                :time_from_name, :time_to_name, :teacher_id, :teacher_name, :teacher_type, :timetable_type,
+                :timetable_id, :timetable_sub_id, :class_room_extra
+             )'
+        );
+        $added = 0;
+        $placed = 0;
+        $skipped = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                $skipped++;
+                continue;
+            }
+            $mapped = self::timetableRow($row);
+            if ($mapped === null) {
+                $skipped++;
+                continue;
+            }
+            $insert->execute(['school_id' => $schoolId] + $mapped);
+            $added++;
+            if ($mapped['class_room_extra'] === 'Y' || $mapped['time_from_name'] === null || $mapped['time_to_name'] === null) {
+                $skipped++;
+                continue;
+            }
+            if (self::placeMapped($schoolId, $mapped)) {
+                $placed++;
+            } else {
+                $skipped++;
+            }
+        }
+        return ['added' => $added, 'placed' => $placed, 'skipped' => $skipped, 'fetched' => count($rows)];
+    }
+
+    private static function syncBlocks(int $schoolId, int $offset, int $row): array
+    {
+        $rows = self::fetch($schoolId, 'blocks', ['limit' => $offset . ',' . $row]);
+        $pdo = Database::pdo();
+        if ($offset === 0) {
+            $pdo->prepare('DELETE FROM rms_blockcourses WHERE school_id = :school_id')->execute(['school_id' => $schoolId]);
+        }
+        $insert = $pdo->prepare(
+            'INSERT INTO rms_blockcourses (school_id, term_key, group_code, day_code, time_from_name, time_to_name, teacher_id, timetable_id, timetable_sub_id)
+             VALUES (:school_id, :term_key, :group_code, :day_code, :time_from_name, :time_to_name, :teacher_id, :timetable_id, :timetable_sub_id)'
+        );
+        $parent = $pdo->prepare(
+            'SELECT subject_code, subject_name, building_name, room_name, group_code, teacher_name
+             FROM rms_timetables WHERE school_id = :school_id AND timetable_id = :timetable_id
+             ORDER BY id LIMIT 1'
+        );
+        $added = 0;
+        $placed = 0;
+        $skipped = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                $skipped++;
+                continue;
+            }
+            $termKey = self::termKey($row);
+            $timetableId = self::field($row, ['timeTableID']);
+            if ($termKey === '' || $timetableId === '') {
+                $skipped++;
+                continue;
+            }
+            $from = self::clock(self::field($row, ['timeFromName']));
+            $to = self::clock(self::field($row, ['timeToName']));
+            $groupCode = self::field($row, ['classRoom1', 'groupCode']);
+            $teacherId = self::field($row, ['teacherIdCard', 'teacher_id']);
+            $insert->execute([
+                'school_id' => $schoolId,
+                'term_key' => $termKey,
+                'group_code' => self::nullable($groupCode, 50),
+                'day_code' => self::nullable(self::field($row, ['day']), 10),
+                'time_from_name' => self::nullable($from, 20),
+                'time_to_name' => self::nullable($to, 20),
+                'teacher_id' => self::nullable($teacherId, 30),
+                'timetable_id' => mb_substr($timetableId, 0, 40),
+                'timetable_sub_id' => self::nullable(self::field($row, ['timeTableSubID']), 40),
+            ]);
+            $added++;
+            if ($from === '' || $to === '') {
+                $skipped++;
+                continue;
+            }
+            $parent->execute(['school_id' => $schoolId, 'timetable_id' => $timetableId]);
+            $base = $parent->fetch() ?: [];
+            $mapped = [
+                'term_key' => $termKey,
+                'group_code' => $groupCode !== '' ? $groupCode : (string) ($base['group_code'] ?? ''),
+                'subject_code' => (string) ($base['subject_code'] ?? ''),
+                'subject_name' => (string) ($base['subject_name'] ?? ''),
+                'building_name' => (string) ($base['building_name'] ?? ''),
+                'room_name' => (string) ($base['room_name'] ?? ''),
+                'day_code' => self::field($row, ['day']),
+                'time_from_name' => $from,
+                'time_to_name' => $to,
+                'teacher_id' => $teacherId,
+                'teacher_name' => (string) ($base['teacher_name'] ?? ''),
+            ];
+            if (self::placeMapped($schoolId, $mapped)) {
+                $placed++;
+            } else {
+                $skipped++;
+            }
+        }
+        return ['added' => $added, 'placed' => $placed, 'skipped' => $skipped, 'fetched' => count($rows)];
+    }
+
+    private static function timetableRow(array $row): ?array
+    {
+        $termKey = self::termKey($row);
+        $subjectCode = self::field($row, ['subjectCode', 'subject_id']);
+        if ($termKey === '' || $subjectCode === '') {
+            return null;
+        }
+        $teacher = trim(self::field($row, ['teacherFirstname']) . ' ' . self::field($row, ['teacherSurname']));
+        return [
+            'term_key' => $termKey,
+            'group_code' => self::nullable(self::field($row, ['classRoom1', 'groupCode']), 50),
+            'subject_code' => mb_substr($subjectCode, 0, 50),
+            'subject_name' => self::nullable(self::field($row, ['subjectName', 'subjectNameTh']), 255),
+            'building_name' => self::nullable(self::field($row, ['buildingName']), 150),
+            'room_name' => self::nullable(self::field($row, ['roomName']), 80),
+            'day_code' => self::nullable(self::field($row, ['day']), 10),
+            'time_from_name' => self::nullable(self::clock(self::field($row, ['timeFromName'])), 20),
+            'time_to_name' => self::nullable(self::clock(self::field($row, ['timeToName'])), 20),
+            'teacher_id' => self::nullable(self::field($row, ['teacherIdCard']), 30),
+            'teacher_name' => self::nullable($teacher, 150),
+            'teacher_type' => self::nullable(self::field($row, ['teacherType']), 10),
+            'timetable_type' => self::nullable(self::field($row, ['timeTableType']), 10),
+            'timetable_id' => self::nullable(self::field($row, ['timeTableID']), 40),
+            'timetable_sub_id' => self::nullable(self::field($row, ['timeTableSubID']), 40),
+            'class_room_extra' => self::nullable(self::field($row, ['classRoomExtra']), 5),
+        ];
+    }
+
+    private static function placeMapped(int $schoolId, array $mapped): bool
+    {
+        $termKey = (string) ($mapped['term_key'] ?? '');
+        $parts = explode('/', $termKey);
+        if (count($parts) !== 2) {
+            return false;
+        }
+        $termId = self::ensureTerm($schoolId, $termKey);
+        $from = (string) ($mapped['time_from_name'] ?? '');
+        $to = (string) ($mapped['time_to_name'] ?? '');
+        $periods = null;
+        if (preg_match('/^(\d{1,2})[:.](\d{2})$/', $from, $start) && preg_match('/^(\d{1,2})[:.](\d{2})$/', $to, $end)) {
+            $minutes = ((int) $end[1] * 60 + (int) $end[2]) - ((int) $start[1] * 60 + (int) $start[2]);
+            if ($minutes > 0) {
+                $periods = max(1, (int) round($minutes / 60));
+            }
+        }
+        return self::placeSchedule($schoolId, ['id' => $termId, 'rms_key' => $termKey], [
+            'student_group_id' => (string) ($mapped['group_code'] ?? ''),
+            'real_subject_id' => (string) ($mapped['subject_code'] ?? ''),
+            'subject_name' => (string) ($mapped['subject_name'] ?? ''),
+            'dpr2' => self::dayName((string) ($mapped['day_code'] ?? '')),
+            'dpr3' => $from . '-' . $to,
+            'teacher_id' => (string) ($mapped['teacher_id'] ?? ''),
+            'teacher_name' => (string) ($mapped['teacher_name'] ?? ''),
+            'roomName' => (string) ($mapped['room_name'] ?? ''),
+            'ucode' => (string) ($mapped['building_name'] ?? ''),
+        ], $periods, 'std');
+    }
+
+    private static function termKey(array $row): string
+    {
+        $combined = self::field($row, ['dateedu_eduyear', 'eduyear']);
+        if ($combined !== '' && str_contains($combined, '/')) {
+            return mb_substr($combined, 0, 20);
+        }
+        $year = self::field($row, ['academicYear', 'eduYear', 'year']);
+        $semester = self::field($row, ['semester', 'semes']);
+        if ($year === '' || $semester === '') {
+            return '';
+        }
+        return mb_substr($semester . '/' . $year, 0, 20);
+    }
+
+    private static function dayName(string $day): string
+    {
+        return match ($day) {
+            '1' => 'จันทร์',
+            '2' => 'อังคาร',
+            '3' => 'พุธ',
+            '4' => 'พฤหัส',
+            '5' => 'ศุกร์',
+            '6' => 'เสาร์',
+            '7' => 'อาทิตย์',
+            default => $day,
+        };
+    }
+
+    private static function clock(string $value): string
+    {
+        return str_replace(':', '.', trim($value));
+    }
+
+    private static function nullable(string $value, int $length): ?string
+    {
+        $value = trim($value);
+        return $value === '' ? null : mb_substr($value, 0, $length);
     }
 
     private static function ensurePlan(int $schoolId, int $termId, string $name): int

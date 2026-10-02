@@ -6,10 +6,96 @@ final class ScheduleEngine
     public const DAYS = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'];
     public const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
 
-    public static function blocked(string $level, int $period): bool
+    public static function lunchState(array $policies, string $level): string
+    {
+        $code = ($level === 'ปวส.' || $level === 'ป.ตรี') ? 'lunch_hvc' : 'lunch_pvc';
+        foreach ($policies as $policy) {
+            if ((string) ($policy['code'] ?? '') !== $code) {
+                continue;
+            }
+            if ((int) ($policy['enabled'] ?? 0) !== 1) {
+                return 'off';
+            }
+            return ($policy['policy_type'] ?? '') === 'required' ? 'required' : 'soft';
+        }
+        return 'off';
+    }
+
+    public static function teacherHourModes(array $policies): array
+    {
+        $modes = ['min' => 'soft', 'max' => 'soft'];
+        foreach ($policies as $policy) {
+            if ((int) ($policy['enabled'] ?? 0) !== 1) {
+                continue;
+            }
+            $side = self::teacherHourSide($policy);
+            if ($side === null || ($policy['policy_type'] ?? '') !== 'required') {
+                continue;
+            }
+            if ($side === 'min' || $side === 'both') {
+                $modes['min'] = 'required';
+            }
+            if ($side === 'max' || $side === 'both') {
+                $modes['max'] = 'required';
+            }
+        }
+        return $modes;
+    }
+
+    public static function maxHoursBlock(array $teacher, int $nextHours, string $mode): ?string
+    {
+        $max = (int) $teacher['max_hours'];
+        if ($mode !== 'required' || $nextHours <= $max) {
+            return null;
+        }
+        return (string) $teacher['name'] . ' สอนได้ไม่เกิน ' . $max . ' ชม./สัปดาห์ ตามนโยบายข้อบังคับ ถ้าลงเพิ่มจะเป็น ' . $nextHours . ' ชม.';
+    }
+
+    public static function maxHoursWarning(array $teacher, int $nextHours, string $mode): ?string
+    {
+        $max = (int) $teacher['max_hours'];
+        if ($mode === 'required' || $nextHours <= $max) {
+            return null;
+        }
+        return 'เกินชั่วโมงสูงสุดของ' . $teacher['name'] . ' (' . $nextHours . '/' . $max . ' ชม. เป็นข้อแนะนำ)';
+    }
+
+    public static function capTeacherLoad(array $entries, array $subjects, array $teachers, array $baseLoads, array $modes): array
+    {
+        if (($modes['max'] ?? 'soft') !== 'required') {
+            return $entries;
+        }
+        $byId = [];
+        foreach ($teachers as $teacher) {
+            $byId[(int) $teacher['id']] = $teacher;
+        }
+        $load = $baseLoads;
+        $kept = [];
+        foreach ($entries as $entry) {
+            $plain = self::plain($entry);
+            $subject = self::findSubject($subjects, (int) $plain['subject_id']);
+            $teacherId = $subject === null ? 0 : (int) ($subject['teacher_id'] ?? 0);
+            $teacher = $byId[$teacherId] ?? null;
+            $length = (int) $plain['length'];
+            if ($teacher !== null && $length > 0) {
+                $next = (int) ($load[$teacherId] ?? 0) + $length;
+                if ((int) $plain['manual'] !== 1 && $next > (int) $teacher['max_hours']) {
+                    continue;
+                }
+                $load[$teacherId] = $next;
+            }
+            $kept[] = $entry;
+        }
+        return $kept;
+    }
+
+    public static function blocked(string $level, int $period, bool $lockLunch = true): bool
     {
         if ($period < 1 || $period >= 10) {
             return true;
+        }
+        if (!$lockLunch) {
+            return false;
         }
         if ($level === 'ปวช.' && $period === 4) {
             return true;
@@ -25,7 +111,7 @@ final class ScheduleEngine
         return (int) $subject['theory'] + (int) $subject['practice'];
     }
 
-    public static function run(array $subjects, array $entries, string $level): array
+    public static function run(array $subjects, array $entries, string $level, bool $lockLunch = true): array
     {
         $kept = [];
         foreach ($entries as $entry) {
@@ -36,7 +122,7 @@ final class ScheduleEngine
         }
         $byKey = self::byKey($subjects);
         if ($byKey === []) {
-            $kept = self::greedy($subjects, $kept, $level);
+            $kept = self::greedy($subjects, $kept, $level, $lockLunch);
         } else {
             foreach (self::partialPattern() as $pattern) {
                 if (!isset($byKey[$pattern['key']])) {
@@ -122,7 +208,7 @@ final class ScheduleEngine
         return ['entries' => $entries, 'phase' => 'manual', 'applied' => null, 'restore' => 'end_by_17'];
     }
 
-    public static function addManual(array $subjects, array $entries, int $subjectId, int $day, int $period, string $level): ?array
+    public static function addManual(array $subjects, array $entries, int $subjectId, int $day, int $period, string $level, bool $lockLunch = true): ?array
     {
         $subject = null;
         foreach ($subjects as $item) {
@@ -139,7 +225,7 @@ final class ScheduleEngine
         $length = 0;
         while ($length < min($left, 3) && $length < 2) {
             $slot = $period + $length;
-            if ($slot > 10 || self::blocked($level, $slot) || self::overlaps($plain, $day, $slot, 1)) {
+            if ($slot > 10 || self::blocked($level, $slot, $lockLunch) || self::overlaps($plain, $day, $slot, 1)) {
                 break;
             }
             $length++;
@@ -151,6 +237,44 @@ final class ScheduleEngine
         return $plain;
     }
 
+    public static function placementError(array $subjects, array $entries, int $entryId, int $day, int $start, int $length, string $level, bool $lockLunch = true): ?string
+    {
+        if ($day < 0 || $day > 4 || $start < 1 || $length < 1 || $start + $length - 1 > 10) {
+            return 'วางคาบนอกตารางไม่ได้';
+        }
+        $subjectId = 0;
+        $others = [];
+        $found = false;
+        foreach ($entries as $entry) {
+            $plain = self::plain($entry);
+            if ((int) ($entry['id'] ?? 0) === $entryId) {
+                $subjectId = (int) $plain['subject_id'];
+                $found = true;
+                continue;
+            }
+            $others[] = $plain;
+        }
+        if (!$found || $subjectId <= 0) {
+            return 'ไม่พบคาบในตารางนี้';
+        }
+        for ($period = $start; $period < $start + $length; $period++) {
+            if (self::blocked($level, $period, $lockLunch)) {
+                return $lockLunch ? 'ช่องนี้เป็นเวลาพักหรือนอกเวลา' : 'ช่องนี้อยู่นอกเวลาเรียน';
+            }
+            if (self::overlaps($others, $day, $period, 1)) {
+                return 'ช่องนี้มีรายวิชาอยู่แล้ว';
+            }
+        }
+        $subject = self::findSubject($subjects, $subjectId);
+        if ($subject === null) {
+            return 'ไม่พบรายวิชาของคาบนี้';
+        }
+        if (self::used($others, $subjectId) + $length > self::need($subject)) {
+            return 'ชั่วโมงของรายวิชานี้เกินแผน ท-ป-น';
+        }
+        return null;
+    }
+
     public static function present(
         array $group,
         array $subjects,
@@ -160,9 +284,13 @@ final class ScheduleEngine
         ?string $applied,
         ?array $pick,
         ?int $selectedId,
-        bool $canEdit
+        bool $canEdit,
+        array $teachers = [],
+        array $teacherLoads = []
     ): array {
         $level = (string) $group['level'];
+        $lunchState = self::lunchState($policies, $level);
+        $lockLunch = $lunchState === 'required';
         $normalized = array_map([self::class, 'plain'], $entries);
         $need = 0;
         $placed = 0;
@@ -195,7 +323,7 @@ final class ScheduleEngine
         $cells = [];
         for ($day = 0; $day < 5; $day++) {
             for ($period = 1; $period <= 10; $period++) {
-                $blocked = self::blocked($level, $period);
+                $blocked = self::blocked($level, $period, $lockLunch);
                 $picked = $pick && (int) $pick['day'] === $day && (int) $pick['period'] === $period;
                 $cells[] = [
                     'day' => $day,
@@ -212,16 +340,19 @@ final class ScheduleEngine
         $blocks = [];
         $lunchPeriod = ($level === 'ปวส.' || $level === 'ป.ตรี') ? 5 : 4;
         $lunchTime = $lunchPeriod === 4 ? '11:00–12:00' : '12:00–13:00';
-        for ($day = 0; $day < 5; $day++) {
-            $blocks[] = [
-                'entry_id' => null,
-                'column' => ($lunchPeriod + 1) . ' / span 1',
-                'row' => (string) ($day + 2),
-                'lunch' => true,
-                'code' => $lunchTime,
-                'name' => 'พักกลางวัน',
-                'meta' => $level === 'ปวช.' ? 'นโยบายข้อ 2' : 'นโยบายพักกลางวัน',
-            ];
+        if ($lunchState !== 'off') {
+            for ($day = 0; $day < 5; $day++) {
+                $blocks[] = [
+                    'entry_id' => null,
+                    'column' => ($lunchPeriod + 1) . ' / span 1',
+                    'row' => (string) ($day + 2),
+                    'lunch' => true,
+                    'soft' => $lunchState === 'soft',
+                    'code' => $lunchTime,
+                    'name' => 'พักกลางวัน',
+                    'meta' => $lunchState === 'soft' ? 'ข้อแนะนำ ลงคาบได้' : 'ข้อบังคับ',
+                ];
+            }
         }
         $selected = null;
         foreach ($normalized as $entry) {
@@ -250,6 +381,8 @@ final class ScheduleEngine
                     'time' => 'วัน' . self::DAYS[$entry['day']] . ' ' . self::TIMES[$entry['start'] - 1] . '–' . self::TIMES[$entry['start'] - 1 + $entry['length']],
                     'teacher' => $subject['teacher_name'] ?: '—',
                     'room' => $subject['room_code'] ?: '—',
+                    'teacher_name' => (string) ($subject['teacher_name'] ?? ''),
+                    'room_code' => (string) ($subject['room_code'] ?? ''),
                     'kind' => $manual
                         ? ((int) $entry['moved'] === 1 ? 'ลงด้วยมือ (ย้ายตามข้อแนะนำ AI)' : 'ลงด้วยมือ · ล็อกไว้')
                         : 'AI จัดให้',
@@ -349,8 +482,16 @@ final class ScheduleEngine
                 $ok = false;
                 $status = 'มีคาบว่างช่วงเช้า';
             }
-            if ($code === 'lunch_hvc') {
-                $status = $level === 'ปวช.' ? 'ไม่เกี่ยวข้องกับกลุ่มนี้ (ระดับ ปวช.)' : 'ตรวจคาบพัก 12–13 น.';
+            if ($code === 'lunch_pvc' || $code === 'lunch_hvc') {
+                $applies = ($code === 'lunch_pvc' && $level !== 'ปวส.' && $level !== 'ป.ตรี')
+                    || ($code === 'lunch_hvc' && ($level === 'ปวส.' || $level === 'ป.ตรี'));
+                if (!$applies) {
+                    $status = 'ไม่เกี่ยวกับกลุ่มนี้';
+                } elseif (($policy['policy_type'] ?? '') !== 'required') {
+                    $status = 'ข้อแนะนำ ลงคาบในช่วงพักได้';
+                } else {
+                    $status = 'ล็อกช่วงพักกลางวัน';
+                }
             }
             if ($code === 'end_by_17' && $lateEnd) {
                 $ok = false;
@@ -370,6 +511,23 @@ final class ScheduleEngine
             }
             if ($code === '') {
                 $status = 'ตรวจแล้ว';
+            }
+            $hourSide = self::teacherHourSide($policy);
+            if ($hourSide !== null) {
+                if (($policy['policy_type'] ?? '') !== 'required') {
+                    $status = 'ข้อแนะนำ ลงคาบนอกช่วงชั่วโมงของครูได้';
+                } else {
+                    $problems = self::teacherHourProblems($subjects, $teachers, $teacherLoads, $hourSide);
+                    if ($problems === []) {
+                        $status = 'ชั่วโมงสอนของครูอยู่ในช่วงที่กำหนด';
+                    } else {
+                        $ok = false;
+                        $status = implode(' · ', array_slice($problems, 0, 3));
+                        if (count($problems) > 3) {
+                            $status .= ' · และอีก ' . (count($problems) - 3) . ' รายการ';
+                        }
+                    }
+                }
             }
             $compliance[] = [
                 'no' => $index,
@@ -409,7 +567,7 @@ final class ScheduleEngine
         ];
     }
 
-    private static function greedy(array $subjects, array $entries, string $level): array
+    private static function greedy(array $subjects, array $entries, string $level, bool $lockLunch = true): array
     {
         foreach ($subjects as $subject) {
             $guard = 0;
@@ -424,7 +582,7 @@ final class ScheduleEngine
                     if ($length < 1 || $length > $left) {
                         continue;
                     }
-                    $slot = self::findSlot($entries, $level, $length);
+                    $slot = self::findSlot($entries, $level, $length, $lockLunch);
                     if ($slot === null) {
                         continue;
                     }
@@ -440,14 +598,14 @@ final class ScheduleEngine
         return $entries;
     }
 
-    private static function findSlot(array $entries, string $level, int $length): ?array
+    private static function findSlot(array $entries, string $level, int $length, bool $lockLunch = true): ?array
     {
         for ($day = 0; $day < 5; $day++) {
             for ($period = 1; $period <= 10; $period++) {
                 $ok = true;
                 for ($offset = 0; $offset < $length; $offset++) {
                     $slot = $period + $offset;
-                    if ($slot > 10 || self::blocked($level, $slot) || self::overlaps($entries, $day, $slot, 1)) {
+                    if ($slot > 10 || self::blocked($level, $slot, $lockLunch) || self::overlaps($entries, $day, $slot, 1)) {
                         $ok = false;
                         break;
                     }
@@ -503,6 +661,68 @@ final class ScheduleEngine
             }
         }
         return $map;
+    }
+
+    private static function teacherHourSide(array $policy): ?string
+    {
+        $code = (string) ($policy['code'] ?? '');
+        if ($code === 'teacher_hours') {
+            return 'both';
+        }
+        if ($code === 'teacher_min_hours') {
+            return 'min';
+        }
+        if ($code === 'teacher_max_hours') {
+            return 'max';
+        }
+        $text = (string) ($policy['short_text'] ?? '') . ' ' . (string) ($policy['body'] ?? '');
+        if (!preg_match('/ครู/u', $text) || !preg_match('/ชั่วโมง|ชม\./u', $text)) {
+            return null;
+        }
+        $min = preg_match('/ต่ำสุด|ไม่ต่ำ|อย่างน้อย|ขั้นต่ำ|ไม่น้อย/u', $text) === 1;
+        $max = preg_match('/สูงสุด|ไม่เกิน|อย่างมาก|ขั้นสูง/u', $text) === 1;
+        if ($min && $max) {
+            return 'both';
+        }
+        if ($min) {
+            return 'min';
+        }
+        if ($max) {
+            return 'max';
+        }
+        return null;
+    }
+
+    private static function teacherHourProblems(array $subjects, array $teachers, array $loads, string $side): array
+    {
+        $byId = [];
+        foreach ($teachers as $teacher) {
+            $byId[(int) $teacher['id']] = $teacher;
+        }
+        $problems = [];
+        $seen = [];
+        foreach ($subjects as $subject) {
+            $teacherId = (int) ($subject['teacher_id'] ?? 0);
+            if ($teacherId <= 0 || isset($seen[$teacherId])) {
+                continue;
+            }
+            $seen[$teacherId] = true;
+            $teacher = $byId[$teacherId] ?? null;
+            if ($teacher === null) {
+                continue;
+            }
+            $got = (int) ($loads[$teacherId] ?? 0);
+            $min = (int) ($teacher['min_hours'] ?? 0);
+            $max = (int) $teacher['max_hours'];
+            $name = (string) $teacher['name'];
+            if (($side === 'max' || $side === 'both') && $got > $max) {
+                $problems[] = $name . ' ' . $got . '/' . $max . ' ชม.';
+            }
+            if (($side === 'min' || $side === 'both') && $min > 0 && $got < $min) {
+                $problems[] = $name . ' ยังไม่ถึง ' . $min . ' ชม.';
+            }
+        }
+        return $problems;
     }
 
     private static function findSubject(array $subjects, int $id): ?array

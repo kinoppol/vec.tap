@@ -211,6 +211,16 @@ function username_error(): string
     return 'ชื่อผู้ใช้เป็นอีเมล หรือตัวอักษรภาษาอังกฤษ ตัวเลข จุด ขีด ยาว 3–64 ตัว';
 }
 
+function geo_kilometers(float $lat1, float $lng1, float $lat2, float $lng2): float
+{
+    $earth = 6371.0;
+    $latDelta = deg2rad($lat2 - $lat1);
+    $lngDelta = deg2rad($lng2 - $lng1);
+    $a = sin($latDelta / 2) ** 2
+        + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($lngDelta / 2) ** 2;
+    return $earth * 2 * atan2(sqrt($a), sqrt(1 - $a));
+}
+
 function wants_json(): bool
 {
     $accept = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');

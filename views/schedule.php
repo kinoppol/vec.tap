@@ -1,14 +1,28 @@
 <?php if ($groups === []): ?>
-    <div class="banner warn">สถานศึกษานี้ยังไม่มีกลุ่มผู้เรียน นำเข้าได้ที่ข้อมูลพื้นฐาน</div>
+    <div class="banner warn"><?= !empty($scheduleLimited) ? 'ยังไม่ได้รับมอบหมายให้จัดตารางกลุ่มใด ให้ผู้ดูแลสถานศึกษามอบหมายที่ข้อมูลพื้นฐาน' : 'สถานศึกษานี้ยังไม่มีกลุ่มผู้เรียน นำเข้าได้ที่ข้อมูลพื้นฐาน' ?></div>
 <?php elseif ($model): ?>
 <div class="card toolbar">
-    <form method="get" action="<?= e(url('/schedule')) ?>">
-        <select name="group" onchange="this.form.submit()">
-            <?php foreach ($groups as $group): ?>
-                <option value="<?= (int) $group['id'] ?>" <?= (int) $group['id'] === (int) $model['group']['id'] ? 'selected' : '' ?>><?= e($group['name']) ?> (<?= (int) $group['student_count'] ?> คน)</option>
+    <?php
+    $current = $model['group'];
+    $currentCode = trim((string) ($current['rms_group_code'] ?? ''));
+    $currentLabel = $current['name'] . ($currentCode !== '' && $currentCode !== $current['name'] ? ' · ' . $currentCode : '');
+    ?>
+    <div class="group-filter" data-group-filter>
+        <input type="search" value="<?= e($currentLabel) ?>" placeholder="พิมพ์ชื่อหรือรหัสกลุ่มเรียน" autocomplete="off" aria-label="กรองกลุ่มผู้เรียน" aria-expanded="false" aria-controls="group-filter-list">
+        <div class="group-filter-list" id="group-filter-list" data-group-list>
+            <?php foreach ($groups as $group):
+                $code = trim((string) ($group['rms_group_code'] ?? ''));
+                $search = trim($group['name'] . ' ' . $code);
+                ?>
+                <a href="<?= e(url('/schedule?group=' . (int) $group['id'])) ?>" data-group-id="<?= (int) $group['id'] ?>" data-search="<?= e($search) ?>" <?= (int) $group['id'] === (int) $current['id'] ? 'aria-current="true"' : '' ?>>
+                    <strong><?= e($group['name']) ?></strong>
+                    <?php if ($code !== ''): ?><small><?= e($code) ?></small><?php endif; ?>
+                    <em><?= (int) $group['student_count'] ?> คน</em>
+                </a>
             <?php endforeach; ?>
-        </select>
-    </form>
+            <p class="empty" data-group-empty hidden>ไม่พบกลุ่มที่ตรงกับคำค้น</p>
+        </div>
+    </div>
     <div class="legend">
         <span><i class="swatch manual"></i>ลงด้วยมือ (ล็อก)</span>
         <span><i class="swatch ai"></i>AI จัดให้</span>
@@ -26,117 +40,243 @@
 <?php if (!$model['can_edit']): ?>
     <div class="banner warn"><i class="bi bi-info-circle"></i> บทบาทครูผู้สอนดูตารางได้อย่างเดียว หากต้องการเปลี่ยนคาบ ให้ติดต่อผู้จัดตาราง งานพัฒนาหลักสูตรการเรียนการสอน</div>
 <?php endif; ?>
-<div class="schedule-layout">
-    <form method="post" action="<?= e(url('/schedule')) ?>" class="card timetable-card">
-        <?= Csrf::field() ?>
-        <input type="hidden" name="group_id" value="<?= (int) $model['group']['id'] ?>">
-        <div class="timetable-scroll"><div class="timetable">
-            <?php foreach ($model['periods'] as $period): ?>
-                <div class="period-head" style="grid-column: <?= (int) $period['column'] ?>; grid-row: 1"><strong>คาบ <?= (int) $period['no'] ?></strong><span><?= e($period['time']) ?></span></div>
-            <?php endforeach; ?>
-            <?php foreach (ScheduleEngine::DAYS as $index => $day): ?>
-                <div class="day-head" style="grid-row: <?= $index + 2 ?>"><?= e($day) ?></div>
-            <?php endforeach; ?>
-            <?php foreach ($model['cells'] as $cell): ?>
-                <button class="cell <?= $cell['blocked'] ? 'is-blocked' : '' ?> <?= $cell['picked'] ? 'is-picked' : '' ?>"
-                    style="grid-column: <?= (int) $cell['column'] ?>; grid-row: <?= (int) $cell['row'] ?>"
-                    name="action" value="pick:<?= (int) $cell['day'] ?>:<?= (int) $cell['period'] ?>"
-                    <?= ($cell['blocked'] || $cell['occupied'] || !$model['can_edit']) ? 'disabled' : '' ?>></button>
-            <?php endforeach; ?>
-            <?php foreach ($model['blocks'] as $block): ?>
-                <?php if ($block['lunch']): ?>
-                    <div class="block lunch" style="grid-column: <?= e($block['column']) ?>; grid-row: <?= e($block['row']) ?>">
-                        <em><?= e($block['code']) ?></em><strong><?= e($block['name']) ?></strong><small><?= e($block['meta']) ?></small>
-                    </div>
-                <?php else:
-                    $tone = $block['warning'] !== '' ? 'warn' : ($block['manual'] ? 'manual' : 'ai');
-                    ?>
-                    <button class="block <?= e($tone) ?> <?= $block['selected'] ? 'selected' : '' ?>"
-                        style="grid-column: <?= e($block['column']) ?>; grid-row: <?= e($block['row']) ?>"
-                        name="action" value="select:<?= (int) $block['entry_id'] ?>">
-                        <em><i class="bi <?= $block['manual'] ? 'bi-lock-fill' : ($block['warning'] !== '' ? 'bi-exclamation-triangle-fill' : 'bi-stars') ?>"></i> <?= e($block['code']) ?></em>
-                        <strong><?= e($block['name']) ?></strong>
-                        <small><?= e($block['meta']) ?></small>
-                    </button>
-                <?php endif; ?>
-            <?php endforeach; ?>
-        </div></div>
-        <p class="hint"><i class="bi bi-hand-index"></i> คลิกช่องว่างเพื่อลงรายวิชาด้วยมือ · คลิกรายวิชาเพื่อดูรายละเอียด ล็อก หรือลบ</p>
-
-        <div class="side">
-            <?php if ($model['show_report']): ?>
-                <section class="card report">
-                    <header><i class="bi bi-stars"></i> ผลการจัดตารางโดย AI</header>
-                    <p>ลงได้ <?= (int) $model['placed'] ?>/<?= (int) $model['need'] ?> ชั่วโมง · ยังลงไม่ได้ <?= count($model['unplaced']) ?> รายวิชา</p>
-                    <?php foreach ($model['unplaced'] as $item): ?>
-                        <div class="unplaced"><strong><?= e($item['name']) ?> · ขาด <?= (int) $item['left'] ?> ชม.</strong><span><?= e($item['reason']) ?></span></div>
-                    <?php endforeach; ?>
-                    <?php if ($model['suggestions']): ?><h3>ข้อแนะนำเพื่อให้จัดตารางเสร็จ</h3><?php endif; ?>
-                    <?php foreach ($model['suggestions'] as $suggestion): ?>
-                        <article class="suggestion">
-                            <div><span class="tag" style="background: <?= e($suggestion['tag_bg']) ?>; color: <?= e($suggestion['tag_fg']) ?>"><?= e($suggestion['tag']) ?></span> <small><?= e($suggestion['effect']) ?></small></div>
-                            <p><?= e($suggestion['text']) ?></p>
-                            <button class="btn btn-line" name="action" value="apply:<?= e($suggestion['key']) ?>" <?= $model['can_edit'] ? '' : 'disabled' ?>>ใช้ข้อแนะนำนี้</button>
-                        </article>
-                    <?php endforeach; ?>
-                </section>
-            <?php endif; ?>
-            <?php if ($model['show_done']): ?>
-                <div class="banner ok"><i class="bi bi-check-circle-fill"></i> <span><strong>ลงครบ <?= (int) $model['placed'] ?>/<?= (int) $model['need'] ?> ชั่วโมง</strong><small><?= e($model['done_note']) ?></small></span></div>
-            <?php endif; ?>
-            <?php if ($model['pick']): ?>
-                <section class="card pick">
-                    <header><strong>ลงด้วยมือ · <?= e($model['pick']['label']) ?></strong>
-                        <button name="action" value="clear_pick" aria-label="ปิด"><i class="bi bi-x-lg"></i></button>
-                    </header>
-                    <?php foreach ($model['pick']['options'] as $option): ?>
-                        <button class="choice" name="action" value="add:<?= (int) $option['subject_id'] ?>"><span><?= e($option['name']) ?></span><small>เหลือ <?= (int) $option['left'] ?> ชม.</small></button>
-                    <?php endforeach; ?>
-                    <?php if ($model['pick']['options'] === []): ?><p class="empty">ทุกรายวิชาลงครบชั่วโมงแล้ว</p><?php endif; ?>
-                </section>
-            <?php endif; ?>
-            <?php if ($model['selected']): $selected = $model['selected']; ?>
-                <section class="card pick">
-                    <header><em><?= e($selected['code']) ?></em>
-                        <button name="action" value="clear_select" aria-label="ปิด"><i class="bi bi-x-lg"></i></button>
-                    </header>
-                    <strong><?= e($selected['name']) ?></strong>
-                    <dl class="meta">
-                        <dt>ท-ป-น</dt><dd><?= e($selected['tpn']) ?></dd>
-                        <dt>เวลา</dt><dd><?= e($selected['time']) ?></dd>
-                        <dt>ครู</dt><dd><?= e($selected['teacher']) ?></dd>
-                        <dt>ห้อง</dt><dd><?= e($selected['room']) ?></dd>
-                        <dt>สถานะ</dt><dd><?= e($selected['kind']) ?></dd>
-                    </dl>
-                    <?php if ($selected['warn'] !== ''): ?><p class="warn-note"><?= e($selected['warn']) ?></p><?php endif; ?>
-                    <div class="row-actions">
-                        <button class="btn" name="action" value="toggle:<?= (int) $selected['id'] ?>" <?= $model['can_edit'] ? '' : 'disabled' ?>><i class="bi <?= $selected['locked'] ? 'bi-unlock' : 'bi-lock' ?>"></i> <?= $selected['locked'] ? 'ปลดล็อก' : 'ล็อกไว้' ?></button>
-                        <button class="btn btn-danger" name="action" value="remove:<?= (int) $selected['id'] ?>" <?= $model['can_edit'] ? '' : 'disabled' ?>><i class="bi bi-trash3"></i> ลบออกจากตาราง</button>
-                    </div>
-                </section>
-            <?php endif; ?>
-            <section class="card">
-                <header class="card-head"><strong>ตรวจชั่วโมงตาม ท-ป-น</strong><em><?= (int) $model['placed'] ?>/<?= (int) $model['need'] ?></em></header>
-                <?php foreach ($model['hours'] as $hour): ?>
-                    <div class="hour-row">
-                        <span><?= e($hour['name']) ?></span>
-                        <em><?= e($hour['tpn']) ?></em>
-                        <b style="background: <?= e($hour['bg']) ?>; color: <?= e($hour['fg']) ?>"><?= (int) $hour['got'] ?>/<?= (int) $hour['need'] ?></b>
-                    </div>
-                <?php endforeach; ?>
-            </section>
-            <?php if ($model['show_compliance']): ?>
-                <section class="card">
-                    <header class="card-head"><strong>การปฏิบัติตามนโยบาย</strong></header>
-                    <?php foreach ($model['compliance'] as $item): ?>
-                        <div class="policy-status">
-                            <i class="bi <?= $item['ok'] ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill' ?>" style="color: <?= $item['ok'] ? '#198754' : '#C28A17' ?>"></i>
-                            <span>ข้อ <?= (int) $item['no'] ?> · <?= e($item['short']) ?><small><?= e($item['status']) ?></small></span>
-                        </div>
-                    <?php endforeach; ?>
-                </section>
-            <?php endif; ?>
-        </div>
-    </form>
+<div class="schedule-layout" data-schedule data-url="<?= e(url('/schedule')) ?>" data-csrf="<?= e(Csrf::token()) ?>" data-group="<?= (int) $model['group']['id'] ?>" data-edit="<?= $model['can_edit'] ? '1' : '0' ?>">
+    <p class="warn-note" data-schedule-note hidden></p>
+    <?php require app_root() . '/views/partials/schedule_board.php'; ?>
 </div>
+<script>
+(() => {
+    const board = document.querySelector("[data-schedule]");
+    if (!board) return;
+    const note = board.querySelector("[data-schedule-note]");
+    let busy = false;
+    let dragged = false;
+
+    const showNote = (text) => {
+        if (!note) return;
+        note.hidden = text === "";
+        note.textContent = text;
+    };
+    const post = async (action) => {
+        if (busy) return;
+        busy = true;
+        showNote("");
+        const body = new FormData();
+        body.set("_csrf", board.dataset.csrf || "");
+        body.set("group_id", board.dataset.group || "");
+        body.set("action", action);
+        const assign = board.querySelector("[data-assign]");
+        if (assign && action === (assign.dataset.assign || "")) {
+            body.set("teacher_name", assign.querySelector("[name=teacher_name]")?.value || "");
+            body.set("room_code", assign.querySelector("[name=room_code]")?.value || "");
+        }
+        try {
+            const response = await fetch(board.dataset.url || "", {
+                method: "POST",
+                body,
+                headers: { Accept: "application/json" },
+            });
+            const data = await response.json();
+            if (!data.ok) throw new Error(data.message || "บันทึกไม่สำเร็จ");
+            const form = board.querySelector("form");
+            if (form && data.html) {
+                const top = window.scrollY;
+                form.outerHTML = data.html;
+                window.scrollTo(0, top);
+            }
+        } catch (error) {
+            showNote(error.message || "บันทึกไม่สำเร็จ");
+        } finally {
+            busy = false;
+        }
+    };
+    const cellAt = (x, y) => {
+        const cells = [...board.querySelectorAll(".cell")];
+        return cells.find((cell) => {
+            const box = cell.getBoundingClientRect();
+            return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
+        }) || null;
+    };
+    const clearPreview = () => {
+        board.querySelectorAll(".cell.is-target, .cell.is-bad").forEach((cell) => {
+            cell.classList.remove("is-target", "is-bad");
+        });
+    };
+    const mark = (day, start, length) => {
+        clearPreview();
+        for (let period = start; period < start + length; period += 1) {
+            const cell = board.querySelector('.cell[data-day="' + day + '"][data-period="' + period + '"]');
+            if (!cell) continue;
+            cell.classList.add(cell.dataset.blocked === "1" ? "is-bad" : "is-target");
+        }
+    };
+
+    board.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || !event.target.closest("[data-assign-field]")) return;
+        const assign = event.target.closest("[data-assign]");
+        if (!assign) return;
+        event.preventDefault();
+        post(assign.dataset.assign || "");
+    });
+
+    board.addEventListener("click", (event) => {
+        const control = event.target.closest("[data-action]");
+        if (!control || control.closest(".grip") || dragged) {
+            dragged = false;
+            return;
+        }
+        if (control.tagName === "BUTTON" && control.name === "action") return;
+        event.preventDefault();
+        post(control.dataset.action || "");
+    });
+
+    board.addEventListener("pointerdown", (event) => {
+        if (board.dataset.edit !== "1" || event.button !== 0) return;
+        const grip = event.target.closest("[data-grip]");
+        const block = event.target.closest("[data-entry]");
+        if (!block) return;
+        event.preventDefault();
+        const origin = {
+            id: block.dataset.entry,
+            day: Number(block.dataset.day),
+            start: Number(block.dataset.start),
+            length: Number(block.dataset.length),
+        };
+        const mode = grip ? grip.dataset.grip : "move";
+        const startX = event.clientX;
+        const startY = event.clientY;
+        let moved = false;
+        block.classList.add("dragging");
+        const onMove = (ev) => {
+            if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 4) moved = true;
+            const cell = cellAt(ev.clientX, ev.clientY);
+            if (!cell) return;
+            const period = Number(cell.dataset.period);
+            const day = Number(cell.dataset.day);
+            if (mode === "move") {
+                mark(day, period, origin.length);
+            } else if (mode === "end" && day === origin.day) {
+                mark(origin.day, origin.start, Math.max(1, period - origin.start + 1));
+            } else if (mode === "start" && day === origin.day) {
+                const end = origin.start + origin.length - 1;
+                const next = Math.min(period, end);
+                mark(origin.day, next, end - next + 1);
+            }
+        };
+        const onUp = (ev) => {
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", onUp);
+            block.classList.remove("dragging");
+            clearPreview();
+            if (!moved) return;
+            dragged = true;
+            const cell = cellAt(ev.clientX, ev.clientY);
+            if (!cell) return;
+            const period = Number(cell.dataset.period);
+            const day = Number(cell.dataset.day);
+            if (mode === "move") {
+                post("move:" + origin.id + ":" + day + ":" + period);
+                return;
+            }
+            if (day !== origin.day) return;
+            if (mode === "end") {
+                const length = Math.max(1, period - origin.start + 1);
+                post("resize:" + origin.id + ":" + origin.day + ":" + origin.start + ":" + length);
+                return;
+            }
+            const end = origin.start + origin.length - 1;
+            const next = Math.min(period, end);
+            post("resize:" + origin.id + ":" + origin.day + ":" + next + ":" + (end - next + 1));
+        };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+    });
+})();
+</script>
 <?php endif; ?>
+<script>
+(() => {
+    const root = document.querySelector("[data-group-filter]");
+    if (!root) return;
+    const input = root.querySelector("input");
+    const list = root.querySelector("[data-group-list]");
+    if (!input || !list) return;
+    const items = [...list.querySelectorAll("[data-group-id]")];
+    const empty = list.querySelector("[data-group-empty]");
+    const current = input.value;
+    let active = -1;
+
+    const shown = () => items.filter((item) => !item.hidden);
+    const place = () => {
+        const box = input.getBoundingClientRect();
+        list.style.position = "fixed";
+        list.style.zIndex = "80";
+        list.style.left = box.left + "px";
+        list.style.top = (box.bottom + 4) + "px";
+        list.style.width = Math.max(box.width, 280) + "px";
+    };
+    const paint = () => {
+        items.forEach((item) => item.classList.remove("on"));
+        const rows = shown();
+        if (rows[active]) {
+            rows[active].classList.add("on");
+            rows[active].scrollIntoView({ block: "nearest" });
+        }
+    };
+    const open = (query) => {
+        const q = query.trim().toLowerCase();
+        items.forEach((item) => {
+            const hay = (item.dataset.search || "").toLowerCase();
+            item.hidden = q !== "" && !hay.includes(q);
+        });
+        const rows = shown();
+        if (empty) empty.hidden = rows.length > 0;
+        active = rows.findIndex((item) => item.getAttribute("aria-current") === "true");
+        if (active < 0 && q !== "" && rows.length > 0) active = 0;
+        list.classList.add("is-open");
+        list.style.display = "block";
+        input.setAttribute("aria-expanded", "true");
+        place();
+        paint();
+    };
+    const close = (restore) => {
+        list.classList.remove("is-open");
+        list.style.display = "none";
+        input.setAttribute("aria-expanded", "false");
+        active = -1;
+        if (restore) input.value = current;
+    };
+
+    input.addEventListener("focus", () => {
+        input.select();
+        open("");
+    });
+    input.addEventListener("input", () => open(input.value));
+    input.addEventListener("search", () => open(input.value));
+    input.addEventListener("keydown", (event) => {
+        const rows = shown();
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            if (!list.classList.contains("is-open")) open(input.value === current ? "" : input.value);
+            const next = shown();
+            if (next.length === 0) return;
+            active = event.key === "ArrowDown" ? (active + 1) % next.length : (active - 1 + next.length) % next.length;
+            paint();
+        } else if (event.key === "Enter") {
+            const target = rows[active] || (rows.length === 1 ? rows[0] : null);
+            if (!target) return;
+            event.preventDefault();
+            window.location = target.href;
+        } else if (event.key === "Escape") {
+            close(true);
+            input.blur();
+        }
+    });
+    document.addEventListener("pointerdown", (event) => {
+        if (root.contains(event.target) || list.contains(event.target)) return;
+        close(true);
+    });
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+})();
+</script>

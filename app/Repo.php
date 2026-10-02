@@ -49,6 +49,180 @@ final class Repo
         return $teachers;
     }
 
+    public static function addTeacherSkill(int $schoolId, int $teacherId, string $skill): void
+    {
+        $skill = trim($skill);
+        if ($skill === '') {
+            throw new RuntimeException('กรอกทักษะการสอน');
+        }
+        if (mb_strlen($skill) > 128) {
+            throw new RuntimeException('ทักษะการสอนยาวเกิน 128 ตัวอักษร');
+        }
+        if (self::teacherId($schoolId, $teacherId) === null) {
+            throw new RuntimeException('ไม่พบครูผู้สอน');
+        }
+        $pdo = Database::pdo();
+        $exists = $pdo->prepare('SELECT id FROM teacher_skills WHERE teacher_id = :teacher_id AND skill = :skill LIMIT 1');
+        $exists->execute(['teacher_id' => $teacherId, 'skill' => $skill]);
+        if ((int) $exists->fetchColumn() > 0) {
+            throw new RuntimeException('มีทักษะนี้อยู่แล้ว');
+        }
+        $pdo->prepare('INSERT INTO teacher_skills (teacher_id, skill) VALUES (:teacher_id, :skill)')
+            ->execute(['teacher_id' => $teacherId, 'skill' => $skill]);
+    }
+
+    public static function removeTeacherSkill(int $schoolId, int $teacherId, string $skill): void
+    {
+        if (self::teacherId($schoolId, $teacherId) === null) {
+            throw new RuntimeException('ไม่พบครูผู้สอน');
+        }
+        Database::pdo()->prepare('DELETE FROM teacher_skills WHERE teacher_id = :teacher_id AND skill = :skill')
+            ->execute(['teacher_id' => $teacherId, 'skill' => trim($skill)]);
+    }
+
+    public static function teacherSkillExportRows(int $schoolId): array
+    {
+        $rows = [];
+        foreach (self::teachers($schoolId) as $teacher) {
+            $skills = $teacher['skills'];
+            if ($skills === []) {
+                $rows[] = [$teacher['name'], ''];
+                continue;
+            }
+            foreach ($skills as $skill) {
+                $rows[] = [$teacher['name'], $skill];
+            }
+        }
+        return $rows;
+    }
+
+    public static function importTeacherSkillRows(int $schoolId, array $rows): int
+    {
+        if (isset($rows[0][0]) && mb_stripos((string) $rows[0][0], 'ชื่อ') !== false) {
+            array_shift($rows);
+        }
+        $byName = [];
+        foreach (self::teachers($schoolId) as $teacher) {
+            $name = (string) $teacher['name'];
+            if (!isset($byName[$name])) {
+                $byName[$name] = (int) $teacher['id'];
+            }
+        }
+        $incoming = [];
+        foreach ($rows as $row) {
+            $name = trim((string) ($row[0] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            if (!isset($byName[$name])) {
+                throw new RuntimeException('ไม่พบครูชื่อ ' . $name);
+            }
+            if (!isset($incoming[$name])) {
+                $incoming[$name] = [];
+            }
+            foreach (preg_split('/\|/u', (string) ($row[1] ?? '')) ?: [] as $part) {
+                $skill = trim($part);
+                if ($skill === '') {
+                    continue;
+                }
+                if (mb_strlen($skill) > 128) {
+                    throw new RuntimeException('ทักษะของ ' . $name . ' ยาวเกิน 128 ตัวอักษร');
+                }
+                if (!in_array($skill, $incoming[$name], true)) {
+                    $incoming[$name][] = $skill;
+                }
+            }
+        }
+        if ($incoming === []) {
+            throw new RuntimeException('ไฟล์ไม่มีชื่อครู');
+        }
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
+        try {
+            $delete = $pdo->prepare('DELETE FROM teacher_skills WHERE teacher_id = :teacher_id');
+            $insert = $pdo->prepare('INSERT INTO teacher_skills (teacher_id, skill) VALUES (:teacher_id, :skill)');
+            foreach ($incoming as $name => $skills) {
+                $teacherId = $byName[$name];
+                $delete->execute(['teacher_id' => $teacherId]);
+                foreach ($skills as $skill) {
+                    $insert->execute(['teacher_id' => $teacherId, 'skill' => $skill]);
+                }
+            }
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+        return count($incoming);
+    }
+
+    public static function teacher(int $schoolId, int $teacherId): ?array
+    {
+        if ($teacherId <= 0) {
+            return null;
+        }
+        $statement = Database::pdo()->prepare(
+            'SELECT * FROM teachers WHERE school_id = :school_id AND id = :id AND is_active = 1 LIMIT 1'
+        );
+        $statement->execute(['school_id' => $schoolId, 'id' => $teacherId]);
+        $row = $statement->fetch();
+        return $row ?: null;
+    }
+
+    public static function setTeacherHours(int $schoolId, int $teacherId, int $minHours, int $maxHours): void
+    {
+        if (self::teacher($schoolId, $teacherId) === null) {
+            throw new RuntimeException('ไม่พบครูผู้สอน');
+        }
+        if ($minHours < 0 || $maxHours < 0 || $minHours > 50 || $maxHours > 50) {
+            throw new RuntimeException('ชั่วโมงสอนต้องอยู่ระหว่าง 0 ถึง 50 ต่อสัปดาห์');
+        }
+        if ($minHours > $maxHours) {
+            throw new RuntimeException('ชั่วโมงต่ำสุดต้องไม่เกินชั่วโมงสูงสุด');
+        }
+        Database::pdo()->prepare(
+            'UPDATE teachers SET min_hours = :min_hours, max_hours = :max_hours WHERE id = :id AND school_id = :school_id'
+        )->execute([
+            'min_hours' => $minHours,
+            'max_hours' => $maxHours,
+            'id' => $teacherId,
+            'school_id' => $schoolId,
+        ]);
+    }
+
+    public static function teachingHours(int $schoolId, ?int $exceptGroupId = null): array
+    {
+        $sql = 'SELECT s.teacher_id, COALESCE(SUM(e.length_periods), 0) AS hours
+                FROM timetable_entries e
+                JOIN subjects s ON s.id = e.subject_id
+                WHERE e.school_id = :school_id AND s.teacher_id IS NOT NULL';
+        $params = ['school_id' => $schoolId];
+        if ($exceptGroupId !== null) {
+            $sql .= ' AND e.group_id <> :group_id';
+            $params['group_id'] = $exceptGroupId;
+        }
+        $sql .= ' GROUP BY s.teacher_id';
+        $statement = Database::pdo()->prepare($sql);
+        $statement->execute($params);
+        $hours = [];
+        foreach ($statement->fetchAll() as $row) {
+            $hours[(int) $row['teacher_id']] = (int) $row['hours'];
+        }
+        return $hours;
+    }
+
+    public static function placedHours(int $schoolId, int $subjectId): int
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT COALESCE(SUM(length_periods), 0) FROM timetable_entries
+             WHERE school_id = :school_id AND subject_id = :subject_id'
+        );
+        $statement->execute(['school_id' => $schoolId, 'subject_id' => $subjectId]);
+        return (int) $statement->fetchColumn();
+    }
+
     public static function groups(int $schoolId): array
     {
         $statement = Database::pdo()->prepare(
@@ -74,6 +248,96 @@ final class Repo
         $statement->execute(['school_id' => $schoolId, 'id' => $groupId]);
         $row = $statement->fetch();
         return $row ?: null;
+    }
+
+    public static function scheduleTeacherId(int $schoolId, array $user): int
+    {
+        $teacherId = (int) ($user['teacher_id'] ?? 0);
+        if ($teacherId > 0 && self::teacher($schoolId, $teacherId) !== null) {
+            return $teacherId;
+        }
+        $name = trim((string) ($user['display_name'] ?? ''));
+        if ($schoolId <= 0 || $name === '') {
+            return 0;
+        }
+        $statement = Database::pdo()->prepare(
+            'SELECT id FROM teachers WHERE school_id = :school_id AND name = :name AND is_active = 1 LIMIT 1'
+        );
+        $statement->execute(['school_id' => $schoolId, 'name' => $name]);
+        return (int) $statement->fetchColumn();
+    }
+
+    public static function groupSchedulers(int $schoolId): array
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT gs.group_id, gs.teacher_id, t.name
+             FROM group_schedulers gs
+             JOIN teachers t ON t.id = gs.teacher_id
+             WHERE gs.school_id = :school_id
+             ORDER BY t.name, gs.id'
+        );
+        $statement->execute(['school_id' => $schoolId]);
+        $map = [];
+        foreach ($statement->fetchAll() as $row) {
+            $map[(int) $row['group_id']][] = [
+                'teacher_id' => (int) $row['teacher_id'],
+                'name' => (string) $row['name'],
+            ];
+        }
+        return $map;
+    }
+
+    public static function schedulerGroupIds(int $schoolId, int $teacherId): array
+    {
+        if ($teacherId <= 0) {
+            return [];
+        }
+        $statement = Database::pdo()->prepare(
+            'SELECT group_id FROM group_schedulers WHERE school_id = :school_id AND teacher_id = :teacher_id ORDER BY group_id'
+        );
+        $statement->execute(['school_id' => $schoolId, 'teacher_id' => $teacherId]);
+        return array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    public static function assignGroupScheduler(int $schoolId, int $groupId, int $teacherId): void
+    {
+        if (self::group($schoolId, $groupId) === null) {
+            throw new RuntimeException('ไม่พบกลุ่มผู้เรียน');
+        }
+        if (self::teacher($schoolId, $teacherId) === null) {
+            throw new RuntimeException('ไม่พบครูผู้สอน');
+        }
+        try {
+            Database::pdo()->prepare(
+                'INSERT INTO group_schedulers (school_id, group_id, teacher_id)
+                 VALUES (:school_id, :group_id, :teacher_id)'
+            )->execute([
+                'school_id' => $schoolId,
+                'group_id' => $groupId,
+                'teacher_id' => $teacherId,
+            ]);
+        } catch (PDOException $exception) {
+            if ($exception->getCode() === '23000') {
+                throw new RuntimeException('มอบหมายครูคนนี้ไว้แล้ว');
+            }
+            throw $exception;
+        }
+    }
+
+    public static function removeGroupScheduler(int $schoolId, int $groupId, int $teacherId): void
+    {
+        $statement = Database::pdo()->prepare(
+            'DELETE FROM group_schedulers
+             WHERE school_id = :school_id AND group_id = :group_id AND teacher_id = :teacher_id'
+        );
+        $statement->execute([
+            'school_id' => $schoolId,
+            'group_id' => $groupId,
+            'teacher_id' => $teacherId,
+        ]);
+        if ($statement->rowCount() < 1) {
+            throw new RuntimeException('ไม่พบการมอบหมายนี้');
+        }
     }
 
     public static function plans(int $schoolId): array
@@ -139,9 +403,183 @@ final class Repo
 
     public static function rooms(int $schoolId): array
     {
-        $statement = Database::pdo()->prepare('SELECT * FROM rooms WHERE school_id = :school_id ORDER BY code');
+        $statement = Database::pdo()->prepare(
+            'SELECT r.*, b.name AS building_name, b.short_name AS building_short
+             FROM rooms r
+             LEFT JOIN buildings b ON b.id = r.building_id
+             WHERE r.school_id = :school_id
+             ORDER BY r.code'
+        );
         $statement->execute(['school_id' => $schoolId]);
         return $statement->fetchAll();
+    }
+
+    public static function addBuilding(int $schoolId, string $name, string $shortName, string $campus, string $distLabel, string $lat, string $lng): void
+    {
+        $name = trim($name);
+        if ($name === '') {
+            throw new RuntimeException('กรอกชื่ออาคาร');
+        }
+        $name = mb_substr($name, 0, 255);
+        $shortName = trim($shortName);
+        if ($shortName === '') {
+            $shortName = $name;
+        }
+        $pdo = Database::pdo();
+        $exists = $pdo->prepare('SELECT id FROM buildings WHERE school_id = :school_id AND name = :name LIMIT 1');
+        $exists->execute(['school_id' => $schoolId, 'name' => $name]);
+        if ((int) $exists->fetchColumn() > 0) {
+            throw new RuntimeException('มีอาคารชื่อนี้อยู่แล้ว');
+        }
+        $point = self::coordinates($lat, $lng);
+        $pdo->prepare(
+            'INSERT INTO buildings (school_id, name, short_name, campus, lat, lng, dist_label)
+             VALUES (:school_id, :name, :short_name, :campus, :lat, :lng, :dist_label)'
+        )->execute([
+            'school_id' => $schoolId,
+            'name' => $name,
+            'short_name' => mb_substr($shortName, 0, 64),
+            'campus' => mb_substr(trim($campus), 0, 255),
+            'lat' => $point['lat'],
+            'lng' => $point['lng'],
+            'dist_label' => mb_substr(trim($distLabel), 0, 64),
+        ]);
+    }
+
+    public static function setBuildingPoint(int $schoolId, int $buildingId, string $lat, string $lng): void
+    {
+        if (self::buildingId($schoolId, $buildingId) === null) {
+            throw new RuntimeException('ไม่พบอาคารนี้');
+        }
+        $point = self::coordinates($lat, $lng);
+        Database::pdo()->prepare(
+            'UPDATE buildings SET lat = :lat, lng = :lng WHERE id = :id AND school_id = :school_id'
+        )->execute([
+            'lat' => $point['lat'],
+            'lng' => $point['lng'],
+            'id' => $buildingId,
+            'school_id' => $schoolId,
+        ]);
+    }
+
+    public static function addRoom(int $schoolId, string $code, int $buildingId, string $roomType, int $capacity): void
+    {
+        $code = mb_substr(trim($code), 0, 32);
+        if ($code === '') {
+            throw new RuntimeException('กรอกรหัสห้อง');
+        }
+        $buildingId = self::buildingId($schoolId, $buildingId);
+        try {
+            $insert = Database::pdo()->prepare(
+                'INSERT INTO rooms (school_id, building_id, code, room_type, capacity)
+                 VALUES (:school_id, :building_id, :code, :room_type, :capacity)'
+            );
+            $insert->bindValue(':school_id', $schoolId, PDO::PARAM_INT);
+            if ($buildingId === null) {
+                $insert->bindValue(':building_id', null, PDO::PARAM_NULL);
+            } else {
+                $insert->bindValue(':building_id', $buildingId, PDO::PARAM_INT);
+            }
+            $insert->bindValue(':code', $code);
+            $insert->bindValue(':room_type', mb_substr(trim($roomType), 0, 255));
+            $insert->bindValue(':capacity', max(0, $capacity), PDO::PARAM_INT);
+            $insert->execute();
+        } catch (PDOException $exception) {
+            if ($exception->getCode() === '23000') {
+                throw new RuntimeException('รหัสห้องนี้มีอยู่แล้ว');
+            }
+            throw $exception;
+        }
+    }
+
+    public static function ensureTeacherId(int $schoolId, string $name): ?int
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return null;
+        }
+        $name = mb_substr($name, 0, 255);
+        $pdo = Database::pdo();
+        $find = $pdo->prepare('SELECT id FROM teachers WHERE school_id = :school_id AND name = :name LIMIT 1');
+        $find->execute(['school_id' => $schoolId, 'name' => $name]);
+        $id = (int) $find->fetchColumn();
+        if ($id > 0) {
+            $pdo->prepare('UPDATE teachers SET is_active = 1 WHERE id = :id AND school_id = :school_id')
+                ->execute(['id' => $id, 'school_id' => $schoolId]);
+            return $id;
+        }
+        $pdo->prepare(
+            'INSERT INTO teachers (school_id, name, dept, degree, max_hours, is_active)
+             VALUES (:school_id, :name, \'\', \'\', 18, 1)'
+        )->execute(['school_id' => $schoolId, 'name' => $name]);
+        return (int) $pdo->lastInsertId();
+    }
+
+    public static function ensureRoomId(int $schoolId, string $code): ?int
+    {
+        $code = mb_substr(trim($code), 0, 32);
+        if ($code === '') {
+            return null;
+        }
+        $pdo = Database::pdo();
+        $find = $pdo->prepare('SELECT id FROM rooms WHERE school_id = :school_id AND code = :code LIMIT 1');
+        $find->execute(['school_id' => $schoolId, 'code' => $code]);
+        $id = (int) $find->fetchColumn();
+        if ($id > 0) {
+            return $id;
+        }
+        $pdo->prepare(
+            'INSERT INTO rooms (school_id, building_id, code, room_type, capacity)
+             VALUES (:school_id, NULL, :code, \'\', 0)'
+        )->execute(['school_id' => $schoolId, 'code' => $code]);
+        return (int) $pdo->lastInsertId();
+    }
+
+    private static function coordinates(string $lat, string $lng): array
+    {
+        return [
+            'lat' => self::coordinate($lat, -90, 90, 'ละติจูด'),
+            'lng' => self::coordinate($lng, -180, 180, 'ลองจิจูด'),
+        ];
+    }
+
+    private static function coordinate(string $value, float $min, float $max, string $label): string
+    {
+        $value = trim($value);
+        if (str_contains($value, ',') && !str_contains($value, '.')) {
+            $value = str_replace(',', '.', $value);
+        }
+        if ($value === '' || !is_numeric($value)) {
+            throw new RuntimeException('กรอก' . $label . 'ของอาคาร');
+        }
+        $number = (float) $value;
+        if ($number < $min || $number > $max) {
+            throw new RuntimeException($label . 'ต้องอยู่ระหว่าง ' . $min . ' ถึง ' . $max);
+        }
+        return number_format($number, 6, '.', '');
+    }
+
+    private static function teacherId(int $schoolId, int $teacherId): ?int
+    {
+        if ($teacherId <= 0) {
+            return null;
+        }
+        $statement = Database::pdo()->prepare(
+            'SELECT id FROM teachers WHERE school_id = :school_id AND id = :id AND is_active = 1 LIMIT 1'
+        );
+        $statement->execute(['school_id' => $schoolId, 'id' => $teacherId]);
+        $id = (int) $statement->fetchColumn();
+        return $id > 0 ? $id : null;
+    }
+
+    private static function buildingId(int $schoolId, int $buildingId): ?int
+    {
+        if ($buildingId <= 0) {
+            return null;
+        }
+        $statement = Database::pdo()->prepare('SELECT id FROM buildings WHERE id = :id AND school_id = :school_id');
+        $statement->execute(['id' => $buildingId, 'school_id' => $schoolId]);
+        return (int) $statement->fetchColumn() > 0 ? $buildingId : null;
     }
 
     public static function policies(int $schoolId): array
@@ -153,10 +591,85 @@ final class Repo
         return $statement->fetchAll();
     }
 
+    public static function mergeConsecutive(int $schoolId, int $groupId): void
+    {
+        $pdo = Database::pdo();
+        $statement = $pdo->prepare(
+            'SELECT id, subject_id, day_index, start_period, length_periods, is_manual, warning, moved
+             FROM timetable_entries
+             WHERE school_id = :school_id AND group_id = :group_id
+             ORDER BY day_index, subject_id, start_period, id'
+        );
+        $statement->execute(['school_id' => $schoolId, 'group_id' => $groupId]);
+        $buckets = [];
+        foreach ($statement->fetchAll() as $row) {
+            $buckets[$row['day_index'] . ':' . $row['subject_id']][] = $row;
+        }
+        $update = $pdo->prepare(
+            'UPDATE timetable_entries
+             SET start_period = :start_period, length_periods = :length_periods, is_manual = :is_manual
+             WHERE id = :id AND school_id = :school_id AND group_id = :group_id'
+        );
+        $delete = $pdo->prepare(
+            'DELETE FROM timetable_entries WHERE id = :id AND school_id = :school_id AND group_id = :group_id'
+        );
+        foreach ($buckets as $rows) {
+            $keep = null;
+            foreach ($rows as $row) {
+                $start = (int) $row['start_period'];
+                $end = $start + (int) $row['length_periods'] - 1;
+                if ($keep === null) {
+                    $keep = [
+                        'id' => (int) $row['id'],
+                        'start' => $start,
+                        'end' => $end,
+                        'manual' => (int) $row['is_manual'] === 1,
+                        'dirty' => false,
+                    ];
+                    continue;
+                }
+                if ($start > $keep['end'] + 1) {
+                    if ($keep['dirty']) {
+                        $update->execute([
+                            'start_period' => $keep['start'],
+                            'length_periods' => $keep['end'] - $keep['start'] + 1,
+                            'is_manual' => $keep['manual'] ? 1 : 0,
+                            'id' => $keep['id'],
+                            'school_id' => $schoolId,
+                            'group_id' => $groupId,
+                        ]);
+                    }
+                    $keep = [
+                        'id' => (int) $row['id'],
+                        'start' => $start,
+                        'end' => $end,
+                        'manual' => (int) $row['is_manual'] === 1,
+                        'dirty' => false,
+                    ];
+                    continue;
+                }
+                $keep['end'] = max($keep['end'], $end);
+                $keep['manual'] = $keep['manual'] || (int) $row['is_manual'] === 1;
+                $keep['dirty'] = true;
+                $delete->execute(['id' => (int) $row['id'], 'school_id' => $schoolId, 'group_id' => $groupId]);
+            }
+            if ($keep !== null && $keep['dirty']) {
+                $update->execute([
+                    'start_period' => $keep['start'],
+                    'length_periods' => $keep['end'] - $keep['start'] + 1,
+                    'is_manual' => $keep['manual'] ? 1 : 0,
+                    'id' => $keep['id'],
+                    'school_id' => $schoolId,
+                    'group_id' => $groupId,
+                ]);
+            }
+        }
+    }
+
     public static function entries(int $schoolId, int $groupId): array
     {
         $statement = Database::pdo()->prepare(
-            'SELECT e.*, s.demo_key, s.code, s.name, s.theory, s.practice, s.extra,
+            'SELECT e.*, s.demo_key, s.code, s.name, s.theory, s.practice, s.extra, s.teacher_id,
                     t.name AS teacher_name, r.code AS room_code
              FROM timetable_entries e
              JOIN subjects s ON s.id = e.subject_id
@@ -684,5 +1197,75 @@ final class Repo
         );
         $statement->execute(['school_id' => $schoolId]);
         return $statement->fetchAll();
+    }
+
+    public static function teacherAccounts(int $schoolId): array
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT teacher_id, username FROM users WHERE school_id = :school_id AND teacher_id IS NOT NULL ORDER BY id'
+        );
+        $statement->execute(['school_id' => $schoolId]);
+        $accounts = [];
+        foreach ($statement->fetchAll() as $row) {
+            $teacherId = (int) $row['teacher_id'];
+            if (!isset($accounts[$teacherId])) {
+                $accounts[$teacherId] = (string) $row['username'];
+            }
+        }
+        return $accounts;
+    }
+
+    public static function createTeacherUser(int $schoolId, int $teacherId, string $password, string $citizenId = ''): void
+    {
+        $teacher = self::teacher($schoolId, $teacherId);
+        if ($teacher === null) {
+            throw new RuntimeException('ไม่พบครูผู้สอน');
+        }
+        if (isset(self::teacherAccounts($schoolId)[$teacherId])) {
+            throw new RuntimeException('ครูคนนี้มีบัญชีอยู่แล้ว');
+        }
+        $stored = preg_replace('/\D/', '', (string) ($teacher['rms_people_id'] ?? '')) ?? '';
+        $typed = preg_replace('/\D/', '', $citizenId) ?? '';
+        if (preg_match('/^\d{13}$/', $stored) === 1) {
+            $username = $stored;
+        } elseif (preg_match('/^\d{13}$/', $typed) === 1) {
+            $username = $typed;
+            try {
+                Database::pdo()->prepare(
+                    'UPDATE teachers SET rms_people_id = :people_id
+                     WHERE id = :id AND school_id = :school_id AND (rms_people_id IS NULL OR rms_people_id = \'\')'
+                )->execute([
+                    'people_id' => $username,
+                    'id' => $teacherId,
+                    'school_id' => $schoolId,
+                ]);
+            } catch (PDOException $exception) {
+                if ($exception->getCode() === '23000') {
+                    throw new RuntimeException('มีเลขประจำตัวนี้ในสถานศึกษาแล้ว');
+                }
+                throw $exception;
+            }
+        } else {
+            throw new RuntimeException('เลขประจำตัวประชาชนต้องเป็นตัวเลข 13 หลัก');
+        }
+        if (strlen($password) < 8) {
+            throw new RuntimeException('รหัสผ่านต้องยาวอย่างน้อย 8 ตัว');
+        }
+        try {
+            Auth::insert(
+                Database::pdo(),
+                $schoolId,
+                $teacherId,
+                $username,
+                $password,
+                (string) $teacher['name'],
+                'teacher'
+            );
+        } catch (PDOException $exception) {
+            if ($exception->getCode() === '23000') {
+                throw new RuntimeException('มีชื่อผู้ใช้นี้แล้ว');
+            }
+            throw $exception;
+        }
     }
 }

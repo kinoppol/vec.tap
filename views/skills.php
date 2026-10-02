@@ -37,7 +37,7 @@
         <header class="card-head"><strong>ภาระสอนหลังแบ่งรายวิชา</strong></header>
         <?php foreach ($loads as $load): ?>
             <div class="load-row">
-                <div><span><?= e($load['name']) ?></span><em style="color: <?= e($load['fg']) ?>"><?= (int) $load['hrs'] ?>/<?= (int) $load['max'] ?> ชม.</em></div>
+                <div><span><?= e($load['name']) ?></span><em style="color: <?= e($load['fg']) ?>"><?= (int) $load['hrs'] ?> (<?= (int) ($load['min'] ?? 0) ?>–<?= (int) $load['max'] ?>) ชม.</em></div>
                 <span class="bar"><span style="width: <?= (int) $load['pct'] ?>%; background: <?= e($load['bar']) ?>"></span></span>
             </div>
         <?php endforeach; ?>
