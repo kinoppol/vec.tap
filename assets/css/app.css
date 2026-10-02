@@ -105,6 +105,13 @@ code, .mono { font-family: "IBM Plex Mono", monospace; }
 .group-filter-list a.on, .group-filter-list a[aria-current="true"] { background: #FDF2F8; }
 .group-filter-list .empty { margin: 0; padding: 10px 12px; }
 .toolbar.plain { background: transparent; border: 0; padding: 0; }
+.data-action-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
+.data-action-bar .inline { display: inline-flex; }
+.data-action-bar .btn { padding: 8px 12px; }
+.hint-fold { margin-bottom: 12px; }
+.hint-toggle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #E2D8E4; background: #fff; border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.hint-fold.is-collapsed [data-hint-body] { display: none; }
+.hint-fold.is-collapsed .hint-toggle { margin-bottom: 0; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 12.5px; }
 .swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; margin-right: 6px; vertical-align: -2px; }
 .swatch.manual { border: 1.5px solid var(--pink); }

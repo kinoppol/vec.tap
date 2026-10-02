@@ -13,7 +13,9 @@ $tabs = [
             <a class="tab <?= $tab === $key ? 'on' : '' ?>" href="<?= e(url('/data?tab=' . $key)) ?>"><i class="bi <?= e($meta[1]) ?>"></i> <?= e($meta[0]) ?></a>
         <?php endforeach; ?>
     </div>
-    <div class="spacer"></div>
+</div>
+<?php if ($tab === 'teachers' || $tab === 'rooms' || in_array($tab, ['groups', 'subjects'], true)): ?>
+<div class="data-action-bar">
     <?php if ($tab === 'teachers'): ?>
         <a class="btn" href="<?= e(url('/data/skills-export')) ?>"><i class="bi bi-download"></i> ส่งออกทักษะ</a>
         <?php if ($canEdit): ?>
@@ -49,6 +51,7 @@ $tabs = [
         </form>
     <?php endif; ?>
 </div>
+<?php endif; ?>
 
 <?php if ($tab === 'teachers'): ?>
 <?php
@@ -63,10 +66,28 @@ if ($minMode === 'required' && $maxMode === 'required') {
         . ' · สูงสุดเป็น' . ($maxMode === 'required' ? 'ข้อบังคับ' : 'ข้อแนะนำ');
 }
 ?>
-<p class="hint"><?= e($hourHint) ?></p>
-<p class="hint">ไฟล์ทักษะมีคอลัมน์ชื่อกับทักษะ หนึ่งแถวต่อหนึ่งทักษะ หรือหลายทักษะในช่องเดียวคั่นด้วย | การนำเข้าแทนที่ทักษะของครูที่มีชื่อในไฟล์</p>
-<?php if ($canAssign): ?><p class="hint">สร้างบัญชีจากชื่อครูได้ในคอลัมน์ครูผู้สอน ชื่อผู้ใช้คือเลขประจำตัวประชาชน 13 หลัก บัญชีนี้จัดตารางได้เฉพาะกลุ่มที่มอบหมายในแท็บกลุ่มผู้เรียน</p><?php endif; ?>
-<div class="card table-wrap">
+<div class="hint-fold" data-hint-fold>
+    <button class="hint-toggle" type="button" data-hint-toggle aria-expanded="true"><i class="bi bi-chevron-up"></i> ย่อคำอธิบาย</button>
+    <div data-hint-body>
+        <p class="hint"><?= e($hourHint) ?></p>
+        <p class="hint">ไฟล์ทักษะมีคอลัมน์ชื่อกับทักษะ หนึ่งแถวต่อหนึ่งทักษะ หรือหลายทักษะในช่องเดียวคั่นด้วย | การนำเข้าแทนที่ทักษะของครูที่มีชื่อในไฟล์</p>
+        <?php if ($canAssign): ?><p class="hint">สร้างบัญชีจากชื่อครูได้ในคอลัมน์ครูผู้สอน ชื่อผู้ใช้คือเลขประจำตัวประชาชน 13 หลัก บัญชีนี้จัดตารางได้เฉพาะกลุ่มที่มอบหมายในแท็บกลุ่มผู้เรียน</p><?php endif; ?>
+    </div>
+</div>
+<div class="card table-wrap" data-datatable data-empty-text="ยังไม่มีครูในสถานศึกษานี้">
+    <div class="dt-bar">
+        <label class="dt-field">แสดง
+            <select data-dt-length aria-label="จำนวนแถวต่อหน้า">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+        </label>
+        <label class="dt-field dt-search">ค้นหา
+            <input type="search" data-dt-search placeholder="ชื่อครู แผนก หรือทักษะ" aria-label="ค้นหาครูผู้สอน">
+        </label>
+    </div>
     <table class="teacher-table">
         <colgroup>
             <col class="col-name">
@@ -74,17 +95,27 @@ if ($minMode === 'required' && $maxMode === 'required') {
             <col class="col-skill">
             <col class="col-hours">
         </colgroup>
-        <thead><tr><th>ครูผู้สอน</th><th>แผนก / วุฒิ</th><th>ทักษะการสอน</th><th>ชั่วโมง/สัปดาห์<small>ต่ำสุด–สูงสุด</small></th></tr></thead>
+        <thead><tr>
+            <th data-dt-sort="text" class="is-sorted">ครูผู้สอน</th>
+            <th data-dt-sort="text">แผนก / วุฒิ</th>
+            <th data-dt-sort="text">ทักษะการสอน</th>
+            <th data-dt-sort="number">ชั่วโมง/สัปดาห์<small>ต่ำสุด–สูงสุด</small></th>
+        </tr></thead>
         <tbody>
         <?php foreach ($teachers as $teacher): ?>
-            <tr>
-                <td>
+            <?php
+            $account = $teacherAccounts[(int) $teacher['id']] ?? '';
+            $citizenId = (string) ($teacher['rms_people_id'] ?? '');
+            $hasCitizenId = preg_match('/^\d{13}$/', $citizenId) === 1;
+            $skillText = implode(' ', $teacher['skills']);
+            $got = (int) ($teachingHours[(int) $teacher['id']] ?? 0);
+            $minHours = (int) ($teacher['min_hours'] ?? 0);
+            $maxHours = (int) $teacher['max_hours'];
+            $search = mb_strtolower(trim($teacher['name'] . ' ' . $account . ' ' . $citizenId . ' ' . $teacher['dept'] . ' ' . $teacher['degree'] . ' ' . $skillText));
+            ?>
+            <tr data-dt-row data-search="<?= e($search) ?>">
+                <td data-text="<?= e((string) $teacher['name']) ?>">
                     <strong><?= e($teacher['name']) ?></strong>
-                    <?php
-                    $account = $teacherAccounts[(int) $teacher['id']] ?? '';
-                    $citizenId = (string) ($teacher['rms_people_id'] ?? '');
-                    $hasCitizenId = preg_match('/^\d{13}$/', $citizenId) === 1;
-                    ?>
                     <?php if ($account !== ''): ?>
                         <small class="muted">ชื่อผู้ใช้ <?= e($account) ?></small>
                     <?php elseif ($canAssign): ?>
@@ -102,8 +133,8 @@ if ($minMode === 'required' && $maxMode === 'required') {
                         </form>
                     <?php endif; ?>
                 </td>
-                <td><?= e($teacher['dept']) ?><small><?= e($teacher['degree']) ?></small></td>
-                <td>
+                <td data-text="<?= e(trim($teacher['dept'] . ' ' . $teacher['degree'])) ?>"><?= e($teacher['dept']) ?><small><?= e($teacher['degree']) ?></small></td>
+                <td data-text="<?= e($skillText) ?>">
                     <div class="tags">
                         <?php foreach ($teacher['skills'] as $skill): ?>
                             <?php if ($canEdit): ?>
@@ -132,12 +163,7 @@ if ($minMode === 'required' && $maxMode === 'required') {
                         <span class="muted">—</span>
                     <?php endif; ?>
                 </td>
-                <td>
-                    <?php
-                    $got = (int) ($teachingHours[(int) $teacher['id']] ?? 0);
-                    $minHours = (int) ($teacher['min_hours'] ?? 0);
-                    $maxHours = (int) $teacher['max_hours'];
-                    ?>
+                <td data-value="<?= $got ?>" data-text="<?= $minHours ?> <?= $maxHours ?> <?= $got ?>">
                     <?php if ($canEdit): ?>
                         <form method="post" action="<?= e(url('/data')) ?>" class="hour-edit">
                             <?= Csrf::field() ?>
@@ -159,6 +185,11 @@ if ($minMode === 'required' && $maxMode === 'required') {
         <?php if ($teachers === []): ?><tr><td colspan="4" class="empty">ยังไม่มีครูในสถานศึกษานี้</td></tr><?php endif; ?>
         </tbody>
     </table>
+    <p class="empty" data-dt-empty <?= $teachers === [] ? '' : 'hidden' ?>><?= $teachers === [] ? 'ยังไม่มีครูในสถานศึกษานี้' : 'ไม่พบครูที่ตรงกับคำค้น' ?></p>
+    <div class="dt-foot">
+        <span data-dt-info></span>
+        <div class="dt-pages" data-dt-pages></div>
+    </div>
 </div>
 <?php elseif ($tab === 'groups'): ?>
 <?php $assignTermId = is_array($term) ? (int) $term['id'] : 0; ?>
@@ -456,7 +487,7 @@ if ($minMode === 'required' && $maxMode === 'required') {
 <?php else: ?>
 <?php $planTermId = is_array($term) ? (int) $term['id'] : 0; ?>
 <?php if ($canEditPlan): ?><p class="hint">ค้นหาหรือเรียงคอลัมน์เพื่อเปิดแผนของกลุ่ม แล้วเพิ่ม ลบ หรือแก้รายวิชา แผนที่ใช้ร่วมกันหลายกลุ่มจะแก้พร้อมกัน</p><?php endif; ?>
-<div class="card table-wrap" data-datatable>
+<div class="card table-wrap" data-datatable data-empty-text="ภาคเรียนนี้ยังไม่มีแผนการเรียน">
     <div class="dt-bar">
         <?php if ($terms !== []): ?>
             <form method="get" action="<?= e(url('/data')) ?>" class="term-switch">
@@ -523,95 +554,6 @@ if ($minMode === 'required' && $maxMode === 'required') {
         <div class="dt-pages" data-dt-pages></div>
     </div>
 </div>
-<script>
-(() => {
-    const root = document.querySelector("[data-datatable]");
-    if (!root) return;
-    const rows = [...root.querySelectorAll("[data-dt-row]")];
-    const tbody = root.querySelector("tbody");
-    const search = root.querySelector("[data-dt-search]");
-    const length = root.querySelector("[data-dt-length]");
-    const info = root.querySelector("[data-dt-info]");
-    const pages = root.querySelector("[data-dt-pages]");
-    const empty = root.querySelector("[data-dt-empty]");
-    const heads = [...root.querySelectorAll("th[data-dt-sort]")];
-    let sortKey = 0;
-    let sortDir = 1;
-    let page = 1;
-    const cellValue = (row, index, kind) => {
-        const cell = row.children[index];
-        if (!cell) return kind === "number" ? 0 : "";
-        if (kind === "number") return Number(cell.dataset.value || 0);
-        return cell.dataset.text || cell.textContent || "";
-    };
-    const renderPages = (pageCount) => {
-        pages.replaceChildren();
-        const add = (label, target, disabled, current) => {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.textContent = label;
-            button.disabled = disabled;
-            if (current) button.className = "on";
-            if (!disabled && !current) button.addEventListener("click", () => { page = target; apply(); });
-            pages.appendChild(button);
-        };
-        add("ก่อนหน้า", page - 1, page <= 1, false);
-        const marks = new Set([1, pageCount, page - 1, page, page + 1]);
-        let skipped = false;
-        for (let i = 1; i <= pageCount; i += 1) {
-            if (!marks.has(i)) {
-                if (!skipped) add("…", page, true, false);
-                skipped = true;
-                continue;
-            }
-            skipped = false;
-            add(String(i), i, false, i === page);
-        }
-        add("ถัดไป", page + 1, page >= pageCount, false);
-    };
-    const apply = () => {
-        const query = (search.value || "").trim().toLowerCase();
-        const kind = heads[sortKey]?.dataset.dtSort || "text";
-        const matched = rows.filter((row) => (row.dataset.search || "").includes(query));
-        matched.sort((a, b) => {
-            const av = cellValue(a, sortKey, kind);
-            const bv = cellValue(b, sortKey, kind);
-            if (kind === "number") return (av - bv) * sortDir;
-            return String(av).localeCompare(String(bv), "th") * sortDir;
-        });
-        const size = Math.max(1, Number(length.value) || matched.length || 1);
-        const pageCount = Math.max(1, Math.ceil(matched.length / size));
-        if (page > pageCount) page = pageCount;
-        const start = (page - 1) * size;
-        const visible = new Set(matched.slice(start, start + size));
-        matched.forEach((row) => tbody.appendChild(row));
-        rows.forEach((row) => { row.hidden = !visible.has(row); });
-        const end = Math.min(matched.length, start + size);
-        info.textContent = matched.length === 0
-            ? "ไม่พบรายการ"
-            : "แสดง " + (start + 1) + "–" + end + " จาก " + matched.length + " รายการ" + (matched.length !== rows.length ? " (กรองจาก " + rows.length + ")" : "");
-        empty.hidden = matched.length !== 0;
-        if (rows.length === 0) empty.textContent = "ภาคเรียนนี้ยังไม่มีแผนการเรียน";
-        renderPages(matched.length === 0 ? 1 : pageCount);
-        pages.hidden = matched.length === 0;
-    };
-    heads.forEach((head, index) => {
-        head.addEventListener("click", () => {
-            if (sortKey === index) sortDir *= -1;
-            else { sortKey = index; sortDir = 1; }
-            heads.forEach((item) => {
-                item.classList.toggle("is-sorted", item === head);
-                item.classList.toggle("is-desc", item === head && sortDir < 0);
-            });
-            page = 1;
-            apply();
-        });
-    });
-    search.addEventListener("input", () => { page = 1; apply(); });
-    length.addEventListener("change", () => { page = 1; apply(); });
-    apply();
-})();
-</script>
 <?php endif; ?>
 <?php elseif ($tab === 'subjects'): ?>
 <div class="card table-wrap">
@@ -831,3 +773,102 @@ if ($minMode === 'required' && $maxMode === 'required') {
 })();
 </script>
 <?php endif; ?>
+<script>
+document.querySelectorAll("[data-datatable]").forEach((root) => {
+    const rows = [...root.querySelectorAll("[data-dt-row]")];
+    const tbody = root.querySelector("tbody");
+    const search = root.querySelector("[data-dt-search]");
+    const length = root.querySelector("[data-dt-length]");
+    const info = root.querySelector("[data-dt-info]");
+    const pages = root.querySelector("[data-dt-pages]");
+    const empty = root.querySelector("[data-dt-empty]");
+    const heads = [...root.querySelectorAll("th[data-dt-sort]")];
+    if (!tbody || !info || !pages || !empty) return;
+    let sortKey = 0;
+    let sortDir = 1;
+    let page = 1;
+    const cellValue = (row, index, kind) => {
+        const cell = row.children[index];
+        if (!cell) return kind === "number" ? 0 : "";
+        if (kind === "number") return Number(cell.dataset.value || 0);
+        return cell.dataset.text || cell.textContent || "";
+    };
+    const renderPages = (pageCount) => {
+        pages.replaceChildren();
+        const add = (label, target, disabled, current) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = label;
+            button.disabled = disabled;
+            if (current) button.className = "on";
+            if (!disabled && !current) button.addEventListener("click", () => { page = target; apply(); });
+            pages.appendChild(button);
+        };
+        add("ก่อนหน้า", page - 1, page <= 1, false);
+        const marks = new Set([1, pageCount, page - 1, page, page + 1]);
+        let skipped = false;
+        for (let i = 1; i <= pageCount; i += 1) {
+            if (!marks.has(i)) {
+                if (!skipped) add("…", page, true, false);
+                skipped = true;
+                continue;
+            }
+            skipped = false;
+            add(String(i), i, false, i === page);
+        }
+        add("ถัดไป", page + 1, page >= pageCount, false);
+    };
+    const apply = () => {
+        const query = (search?.value || "").trim().toLowerCase();
+        const kind = heads[sortKey]?.dataset.dtSort || "text";
+        const matched = rows.filter((row) => (row.dataset.search || "").includes(query));
+        matched.sort((a, b) => {
+            const av = cellValue(a, sortKey, kind);
+            const bv = cellValue(b, sortKey, kind);
+            if (kind === "number") return (av - bv) * sortDir;
+            return String(av).localeCompare(String(bv), "th") * sortDir;
+        });
+        const size = Math.max(1, Number(length?.value) || matched.length || 1);
+        const pageCount = Math.max(1, Math.ceil(matched.length / size));
+        if (page > pageCount) page = pageCount;
+        const start = (page - 1) * size;
+        const visible = new Set(matched.slice(start, start + size));
+        matched.forEach((row) => tbody.appendChild(row));
+        rows.forEach((row) => { row.hidden = !visible.has(row); });
+        const end = Math.min(matched.length, start + size);
+        info.textContent = matched.length === 0
+            ? "ไม่พบรายการ"
+            : "แสดง " + (start + 1) + "–" + end + " จาก " + matched.length + " รายการ" + (matched.length !== rows.length ? " (กรองจาก " + rows.length + ")" : "");
+        empty.hidden = matched.length !== 0;
+        if (rows.length === 0 && root.dataset.emptyText) empty.textContent = root.dataset.emptyText;
+        renderPages(matched.length === 0 ? 1 : pageCount);
+        pages.hidden = matched.length === 0;
+    };
+    heads.forEach((head, index) => {
+        head.addEventListener("click", () => {
+            if (sortKey === index) sortDir *= -1;
+            else { sortKey = index; sortDir = 1; }
+            heads.forEach((item) => {
+                item.classList.toggle("is-sorted", item === head);
+                item.classList.toggle("is-desc", item === head && sortDir < 0);
+            });
+            page = 1;
+            apply();
+        });
+    });
+    if (search) search.addEventListener("input", () => { page = 1; apply(); });
+    if (length) length.addEventListener("change", () => { page = 1; apply(); });
+    apply();
+});
+document.querySelectorAll("[data-hint-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+        const fold = button.closest("[data-hint-fold]");
+        if (!fold) return;
+        const collapsed = fold.classList.toggle("is-collapsed");
+        button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        button.innerHTML = collapsed
+            ? '<i class="bi bi-chevron-down"></i> แสดงคำอธิบาย'
+            : '<i class="bi bi-chevron-up"></i> ย่อคำอธิบาย';
+    });
+});
+</script>
