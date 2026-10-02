@@ -27,22 +27,33 @@ return [
             GROUP BY school_id
          ) picked ON picked.school_id = g.school_id
          JOIN terms current ON current.id = picked.id
+         JOIN (
+            SELECT src.school_id, src.rms_group_code, MIN(src.id) AS keep_id
+            FROM student_groups src
+            JOIN (
+                SELECT school_id, MAX(id) AS id
+                FROM terms
+                WHERE is_current = 1
+                GROUP BY school_id
+            ) cur ON cur.school_id = src.school_id
+            LEFT JOIN student_groups on_current
+              ON on_current.school_id = src.school_id
+             AND on_current.term_id = cur.id
+             AND on_current.rms_group_code = src.rms_group_code
+            WHERE src.rms_group_code IS NOT NULL
+              AND src.rms_group_code <> ''
+              AND on_current.id IS NULL
+            GROUP BY src.school_id, src.rms_group_code
+         ) chosen ON chosen.keep_id = g.id
          LEFT JOIN (
             SELECT school_id, term_id
             FROM student_groups
             WHERE rms_group_code IS NOT NULL AND rms_group_code <> ''
             GROUP BY school_id, term_id
          ) filled ON filled.school_id = g.school_id AND filled.term_id = current.id
-         LEFT JOIN student_groups existing
-           ON existing.school_id = g.school_id
-          AND existing.term_id = current.id
-          AND existing.rms_group_code = g.rms_group_code
          SET g.term_id = current.id
-         WHERE g.rms_group_code IS NOT NULL
-           AND g.rms_group_code <> ''
-           AND g.term_id <> current.id
-           AND filled.term_id IS NULL
-           AND existing.id IS NULL",
+         WHERE g.term_id <> current.id
+           AND filled.term_id IS NULL",
         "UPDATE study_plans p
          JOIN (
             SELECT school_id, MAX(id) AS id
@@ -51,21 +62,32 @@ return [
             GROUP BY school_id
          ) picked ON picked.school_id = p.school_id
          JOIN terms current ON current.id = picked.id
+         JOIN (
+            SELECT src.school_id, src.rms_key, MIN(src.id) AS keep_id
+            FROM study_plans src
+            JOIN (
+                SELECT school_id, MAX(id) AS id
+                FROM terms
+                WHERE is_current = 1
+                GROUP BY school_id
+            ) cur ON cur.school_id = src.school_id
+            LEFT JOIN study_plans on_current
+              ON on_current.school_id = src.school_id
+             AND on_current.term_id = cur.id
+             AND on_current.rms_key = src.rms_key
+            WHERE src.rms_key IS NOT NULL
+              AND src.rms_key <> ''
+              AND on_current.id IS NULL
+            GROUP BY src.school_id, src.rms_key
+         ) chosen ON chosen.keep_id = p.id
          LEFT JOIN (
             SELECT school_id, term_id
             FROM study_plans
             WHERE rms_key IS NOT NULL AND rms_key <> ''
             GROUP BY school_id, term_id
          ) filled ON filled.school_id = p.school_id AND filled.term_id = current.id
-         LEFT JOIN study_plans existing
-           ON existing.school_id = p.school_id
-          AND existing.term_id = current.id
-          AND existing.rms_key = p.rms_key
          SET p.term_id = current.id
-         WHERE p.rms_key IS NOT NULL
-           AND p.rms_key <> ''
-           AND p.term_id <> current.id
-           AND filled.term_id IS NULL
-           AND existing.id IS NULL",
+         WHERE p.term_id <> current.id
+           AND filled.term_id IS NULL",
     ],
 ];
