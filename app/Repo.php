@@ -464,11 +464,46 @@ final class Repo
         return $rows;
     }
 
+    public static function facilityFileKind(array $rows): string
+    {
+        foreach (array_slice($rows, 0, 3) as $row) {
+            $kind = self::facilityRowKind($row);
+            if ($kind !== '') {
+                return $kind;
+            }
+        }
+        return '';
+    }
+
+    private static function facilityRowKind(array $row): string
+    {
+        $first = trim((string) ($row[0] ?? ''));
+        $second = trim((string) ($row[1] ?? ''));
+        if (in_array($first, ['รหัส', 'รหัสห้อง', 'รหัสห้องเรียน'], true)) {
+            return 'rooms';
+        }
+        if (in_array($first, ['ชื่อ', 'ชื่ออาคาร'], true) || $second === 'ชื่อย่อ') {
+            return 'buildings';
+        }
+        return '';
+    }
+
+    private static function dropFacilityHeader(array $rows, string $kind): array
+    {
+        foreach ($rows as $index => $row) {
+            if (self::facilityRowKind($row) === $kind) {
+                return array_values(array_slice($rows, $index + 1));
+            }
+        }
+        return $rows;
+    }
+
     public static function importBuildingRows(int $schoolId, array $rows): int
     {
-        if (isset($rows[0][0]) && in_array(trim((string) $rows[0][0]), ['ชื่อ', 'ชื่ออาคาร'], true)) {
-            array_shift($rows);
+        if (self::facilityFileKind($rows) === 'rooms') {
+            throw new RuntimeException('ไฟล์นี้เป็นข้อมูลห้องเรียน ให้ใช้ปุ่มนำเข้าห้องเรียน');
         }
+        $rows = self::dropFacilityHeader($rows, 'buildings');
         $pdo = Database::pdo();
         $find = $pdo->prepare('SELECT id, lat, lng FROM buildings WHERE school_id = :school_id AND name = :name LIMIT 1');
         $insert = $pdo->prepare(
@@ -535,13 +570,23 @@ final class Repo
 
     public static function importRoomRows(int $schoolId, array $rows): int
     {
-        if (isset($rows[0][0]) && in_array(trim((string) $rows[0][0]), ['รหัส', 'รหัสห้อง'], true)) {
-            array_shift($rows);
+        if (self::facilityFileKind($rows) === 'buildings') {
+            throw new RuntimeException('ไฟล์นี้เป็นข้อมูลอาคาร ให้ใช้ปุ่มนำเข้าอาคาร');
         }
+        $rows = self::dropFacilityHeader($rows, 'rooms');
         $buildings = [];
+        $ambiguous = [];
         foreach (self::buildings($schoolId) as $building) {
-            if (!isset($buildings[$building['name']])) {
-                $buildings[$building['name']] = (int) $building['id'];
+            foreach ([(string) $building['name'], (string) $building['short_name']] as $label) {
+                $label = trim($label);
+                if ($label === '') {
+                    continue;
+                }
+                if (isset($buildings[$label]) && $buildings[$label] !== (int) $building['id']) {
+                    $ambiguous[$label] = true;
+                    continue;
+                }
+                $buildings[$label] = (int) $building['id'];
             }
         }
         $pdo = Database::pdo();
@@ -557,6 +602,9 @@ final class Repo
                 $buildingName = trim((string) ($row[1] ?? ''));
                 $buildingId = null;
                 if ($buildingName !== '') {
+                    if (isset($ambiguous[$buildingName])) {
+                        throw new RuntimeException('ชื่อ «' . $buildingName . '» ตรงกับอาคารมากกว่าหนึ่งหลัง ใส่ชื่ออาคารแบบเต็ม');
+                    }
                     if (!isset($buildings[$buildingName])) {
                         throw new RuntimeException('ไม่พบอาคารชื่อ ' . $buildingName);
                     }
@@ -565,10 +613,10 @@ final class Repo
                 $capacityText = trim((string) ($row[3] ?? ''));
                 if ($capacityText === '') {
                     $capacity = 0;
-                } elseif (!preg_match('/^\d+$/', $capacityText)) {
+                } elseif (!is_numeric(str_replace(',', '.', $capacityText))) {
                     throw new RuntimeException('ความจุของห้อง ' . $code . ' ต้องเป็นจำนวนเต็ม');
                 } else {
-                    $capacity = (int) $capacityText;
+                    $capacity = (int) round((float) str_replace(',', '.', $capacityText));
                 }
                 if ($capacity > 999) {
                     throw new RuntimeException('ความจุของห้อง ' . $code . ' ต้องไม่เกิน 999');

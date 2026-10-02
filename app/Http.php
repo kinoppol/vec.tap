@@ -1121,7 +1121,11 @@ function page_data_post(): void
         }
         try {
             $rows = uploaded_rows();
-            if ($action === 'import_buildings') {
+            $kind = Repo::facilityFileKind($rows);
+            if ($kind === '') {
+                $kind = $action === 'import_buildings' ? 'buildings' : 'rooms';
+            }
+            if ($kind === 'buildings') {
                 $count = Repo::importBuildingRows($schoolId, $rows);
                 flash('นำเข้าอาคาร ' . $count . ' หลังแล้ว');
             } else {

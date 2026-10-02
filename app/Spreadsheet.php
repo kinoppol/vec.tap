@@ -89,12 +89,42 @@ final class Spreadsheet
                 $value = (string) $cell->v;
                 if ($type === 's') {
                     $value = $shared[(int) $value] ?? '';
+                } elseif ($type === 'inlineStr' && isset($cell->is)) {
+                    $value = '';
+                    foreach ($cell->is->xpath('.//t') ?: [] as $text) {
+                        $value .= (string) $text;
+                    }
                 }
-                $line[] = $value;
+                $index = self::columnIndex((string) $cell['r']);
+                if ($index < 0) {
+                    $line[] = $value;
+                    continue;
+                }
+                $line[$index] = $value;
             }
-            $rows[] = $line;
+            if ($line === []) {
+                continue;
+            }
+            ksort($line);
+            $filled = [];
+            for ($column = 0; $column <= max(array_keys($line)); $column++) {
+                $filled[] = (string) ($line[$column] ?? '');
+            }
+            $rows[] = $filled;
         }
         return self::clean($rows);
+    }
+
+    private static function columnIndex(string $reference): int
+    {
+        if (!preg_match('/^([A-Z]+)/', $reference, $match)) {
+            return -1;
+        }
+        $index = 0;
+        foreach (str_split($match[1]) as $letter) {
+            $index = $index * 26 + (ord($letter) - 64);
+        }
+        return $index - 1;
     }
 
     private static function clean(array $rows): array
