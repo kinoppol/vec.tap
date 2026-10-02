@@ -288,17 +288,26 @@ final class Repo
     public static function groupSchedulers(int $schoolId): array
     {
         $statement = Database::pdo()->prepare(
-            'SELECT gs.group_id, gs.teacher_id, t.name
+            'SELECT DISTINCT g2.id AS group_id, gs.teacher_id, t.name
              FROM group_schedulers gs
              JOIN teachers t ON t.id = gs.teacher_id
+             JOIN student_groups g ON g.id = gs.group_id AND g.school_id = gs.school_id
+             JOIN student_groups g2 ON g2.school_id = g.school_id AND ' . self::sameGroupSql('g', 'g2') . '
              WHERE gs.school_id = :school_id
-             ORDER BY t.name, gs.id'
+             ORDER BY t.name, g2.id'
         );
         $statement->execute(['school_id' => $schoolId]);
         $map = [];
         foreach ($statement->fetchAll() as $row) {
-            $map[(int) $row['group_id']][] = [
-                'teacher_id' => (int) $row['teacher_id'],
+            $groupId = (int) $row['group_id'];
+            $teacherId = (int) $row['teacher_id'];
+            foreach ($map[$groupId] ?? [] as $existing) {
+                if ($existing['teacher_id'] === $teacherId) {
+                    continue 2;
+                }
+            }
+            $map[$groupId][] = [
+                'teacher_id' => $teacherId,
                 'name' => (string) $row['name'],
             ];
         }
@@ -311,7 +320,12 @@ final class Repo
             return [];
         }
         $statement = Database::pdo()->prepare(
-            'SELECT group_id FROM group_schedulers WHERE school_id = :school_id AND teacher_id = :teacher_id ORDER BY group_id'
+            'SELECT DISTINCT g2.id
+             FROM group_schedulers gs
+             JOIN student_groups g ON g.id = gs.group_id AND g.school_id = gs.school_id
+             JOIN student_groups g2 ON g2.school_id = g.school_id AND ' . self::sameGroupSql('g', 'g2') . '
+             WHERE gs.school_id = :school_id AND gs.teacher_id = :teacher_id
+             ORDER BY g2.id'
         );
         $statement->execute(['school_id' => $schoolId, 'teacher_id' => $teacherId]);
         return array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN));
@@ -319,43 +333,77 @@ final class Repo
 
     public static function assignGroupScheduler(int $schoolId, int $groupId, int $teacherId): void
     {
-        if (self::group($schoolId, $groupId) === null) {
-            throw new RuntimeException('ไม่พบกลุ่มผู้เรียน');
-        }
         if (self::teacher($schoolId, $teacherId) === null) {
             throw new RuntimeException('ไม่พบครูผู้สอน');
         }
-        try {
-            Database::pdo()->prepare(
-                'INSERT INTO group_schedulers (school_id, group_id, teacher_id)
-                 VALUES (:school_id, :group_id, :teacher_id)'
-            )->execute([
-                'school_id' => $schoolId,
-                'group_id' => $groupId,
-                'teacher_id' => $teacherId,
-            ]);
-        } catch (PDOException $exception) {
-            if ($exception->getCode() === '23000') {
-                throw new RuntimeException('มอบหมายครูคนนี้ไว้แล้ว');
+        $groupIds = self::siblingGroupIds($schoolId, $groupId);
+        if ($groupIds === []) {
+            throw new RuntimeException('ไม่พบกลุ่มผู้เรียน');
+        }
+        $insert = Database::pdo()->prepare(
+            'INSERT INTO group_schedulers (school_id, group_id, teacher_id)
+             VALUES (:school_id, :group_id, :teacher_id)'
+        );
+        $inserted = 0;
+        foreach ($groupIds as $id) {
+            try {
+                $insert->execute([
+                    'school_id' => $schoolId,
+                    'group_id' => $id,
+                    'teacher_id' => $teacherId,
+                ]);
+                $inserted++;
+            } catch (PDOException $exception) {
+                if ($exception->getCode() !== '23000') {
+                    throw $exception;
+                }
             }
-            throw $exception;
+        }
+        if ($inserted === 0) {
+            throw new RuntimeException('มอบหมายครูคนนี้ไว้แล้ว');
         }
     }
 
     public static function removeGroupScheduler(int $schoolId, int $groupId, int $teacherId): void
     {
+        $groupIds = self::siblingGroupIds($schoolId, $groupId);
+        if ($groupIds === []) {
+            throw new RuntimeException('ไม่พบกลุ่มผู้เรียน');
+        }
+        $params = ['school_id' => $schoolId, 'teacher_id' => $teacherId];
+        $holders = [];
+        foreach ($groupIds as $index => $id) {
+            $key = 'group_id_' . $index;
+            $holders[] = ':' . $key;
+            $params[$key] = $id;
+        }
         $statement = Database::pdo()->prepare(
             'DELETE FROM group_schedulers
-             WHERE school_id = :school_id AND group_id = :group_id AND teacher_id = :teacher_id'
+             WHERE school_id = :school_id AND teacher_id = :teacher_id AND group_id IN (' . implode(', ', $holders) . ')'
         );
-        $statement->execute([
-            'school_id' => $schoolId,
-            'group_id' => $groupId,
-            'teacher_id' => $teacherId,
-        ]);
+        $statement->execute($params);
         if ($statement->rowCount() < 1) {
             throw new RuntimeException('ไม่พบการมอบหมายนี้');
         }
+    }
+
+    private static function siblingGroupIds(int $schoolId, int $groupId): array
+    {
+        $statement = Database::pdo()->prepare(
+            'SELECT g2.id
+             FROM student_groups g
+             JOIN student_groups g2 ON g2.school_id = g.school_id AND ' . self::sameGroupSql('g', 'g2') . '
+             WHERE g.school_id = :school_id AND g.id = :id
+             ORDER BY g2.id'
+        );
+        $statement->execute(['school_id' => $schoolId, 'id' => $groupId]);
+        return array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    private static function sameGroupSql(string $left, string $right): string
+    {
+        return '((NULLIF(' . $left . '.rms_group_code, \'\') IS NOT NULL AND ' . $right . '.rms_group_code = ' . $left . '.rms_group_code)
+            OR (NULLIF(' . $left . '.rms_group_code, \'\') IS NULL AND NULLIF(' . $right . '.rms_group_code, \'\') IS NULL AND ' . $right . '.name = ' . $left . '.name))';
     }
 
     public static function plans(int $schoolId): array
