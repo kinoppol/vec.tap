@@ -339,10 +339,10 @@ final class Rms
         $seen = [];
         $findId = $pdo->prepare('SELECT id FROM teachers WHERE school_id = :school_id AND rms_people_id = :people_id LIMIT 1');
         $findName = $pdo->prepare('SELECT id FROM teachers WHERE school_id = :school_id AND name = :name AND rms_people_id IS NULL LIMIT 1');
-        $update = $pdo->prepare('UPDATE teachers SET name = :name, is_active = 1, rms_people_id = :people_id WHERE id = :id AND school_id = :school_id');
+        $update = $pdo->prepare('UPDATE teachers SET name = :name, is_active = :is_active, rms_people_id = :people_id WHERE id = :id AND school_id = :school_id');
         $insert = $pdo->prepare(
             'INSERT INTO teachers (school_id, name, dept, degree, max_hours, rms_people_id, is_active)
-             VALUES (:school_id, :name, \'\', \'\', 18, :people_id, 1)'
+             VALUES (:school_id, :name, \'\', \'\', 18, :people_id, :is_active)'
         );
         foreach ($rows as $row) {
             if (!is_array($row) || trim((string) ($row['people_exit'] ?? '')) !== '0') {
@@ -356,6 +356,7 @@ final class Rms
                 continue;
             }
             $seen[$peopleId] = true;
+            $active = self::teaches($name) ? 1 : 0;
             $findId->execute(['school_id' => $schoolId, 'people_id' => $peopleId]);
             $id = (int) $findId->fetchColumn();
             if ($id <= 0) {
@@ -363,10 +364,10 @@ final class Rms
                 $id = (int) $findName->fetchColumn();
             }
             if ($id > 0) {
-                $update->execute(['name' => $name, 'people_id' => $peopleId, 'id' => $id, 'school_id' => $schoolId]);
+                $update->execute(['name' => $name, 'is_active' => $active, 'people_id' => $peopleId, 'id' => $id, 'school_id' => $schoolId]);
                 $updated++;
             } else {
-                $insert->execute(['school_id' => $schoolId, 'name' => $name, 'people_id' => $peopleId]);
+                $insert->execute(['school_id' => $schoolId, 'name' => $name, 'people_id' => $peopleId, 'is_active' => $active]);
                 $created++;
             }
         }
@@ -545,6 +546,7 @@ final class Rms
                 $added++;
             }
         }
+        self::disambiguateGroupNames($schoolId, $termId);
         return ['added' => $added, 'updated' => $updated, 'skipped' => $skipped, 'fetched' => count($rows)];
     }
 
@@ -1557,7 +1559,46 @@ final class Rms
                 return [(int) $match[1], (int) $match[2], (int) $match[3]];
             }
         }
+        $credit = self::field($row, ['credit', 'subject_credit', 'creditHour']);
+        if ($credit !== '' && preg_match('/^\d+$/', $credit)) {
+            return [(int) $credit, 0, 0];
+        }
         return null;
+    }
+
+    private static function teaches(string $name): bool
+    {
+        return !str_contains($name, 'ผู้ดูแลระบบ');
+    }
+
+    private static function disambiguateGroupNames(int $schoolId, int $termId): void
+    {
+        $pdo = Database::pdo();
+        $statement = $pdo->prepare(
+            'SELECT id, name, rms_group_code FROM student_groups
+             WHERE school_id = :school_id AND term_id = :term_id AND rms_group_code IS NOT NULL AND rms_group_code <> \'\''
+        );
+        $statement->execute(['school_id' => $schoolId, 'term_id' => $termId]);
+        $rows = $statement->fetchAll();
+        $groups = [];
+        foreach ($rows as $row) {
+            $base = preg_replace('/ · รุ่น \d{2}$/u', '', (string) $row['name']) ?? (string) $row['name'];
+            $groups[$base][] = $row;
+        }
+        $update = $pdo->prepare('UPDATE student_groups SET name = :name WHERE id = :id AND school_id = :school_id');
+        foreach ($groups as $base => $list) {
+            foreach ($list as $row) {
+                $cohort = '';
+                if (preg_match('/^(\d{2})/', (string) $row['rms_group_code'], $match)) {
+                    $cohort = $match[1];
+                }
+                $name = count($list) > 1 && $cohort !== '' ? $base . ' · รุ่น ' . $cohort : $base;
+                if ($name === (string) $row['name']) {
+                    continue;
+                }
+                $update->execute(['name' => $name, 'id' => (int) $row['id'], 'school_id' => $schoolId]);
+            }
+        }
     }
 
     private static function rememberCatalogHours(int $schoolId, string $code, string $name, ?array $hours): void
