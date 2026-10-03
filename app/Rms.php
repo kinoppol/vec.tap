@@ -390,8 +390,11 @@ final class Rms
         $updated = 0;
         $skipped = 0;
         $find = $pdo->prepare('SELECT id FROM terms WHERE school_id = :school_id AND rms_key = :rms_key LIMIT 1');
+        $findLabel = $pdo->prepare(
+            'SELECT id FROM terms WHERE school_id = :school_id AND label = :label AND (rms_key IS NULL OR rms_key = \'\') ORDER BY id LIMIT 1'
+        );
         $update = $pdo->prepare(
-            'UPDATE terms SET label = :label, start_date = :start_date, end_date = :end_date WHERE id = :id AND school_id = :school_id'
+            'UPDATE terms SET label = :label, rms_key = :rms_key, start_date = :start_date, end_date = :end_date WHERE id = :id AND school_id = :school_id'
         );
         $insert = $pdo->prepare(
             'INSERT INTO terms (school_id, label, is_current, rms_key, start_date, end_date)
@@ -413,9 +416,14 @@ final class Rms
             $end = self::dateOrNull($row['dateedu_end'] ?? null);
             $find->execute(['school_id' => $schoolId, 'rms_key' => $key]);
             $id = (int) $find->fetchColumn();
+            if ($id <= 0) {
+                $findLabel->execute(['school_id' => $schoolId, 'label' => $label]);
+                $id = (int) $findLabel->fetchColumn();
+            }
             if ($id > 0) {
                 $update->execute([
                     'label' => $label,
+                    'rms_key' => $key,
                     'start_date' => $start,
                     'end_date' => $end,
                     'id' => $id,
@@ -1433,6 +1441,16 @@ final class Rms
         $parts = explode('/', $key);
         $label = 'ภาคเรียนที่ ' . ($parts[0] ?? '') . '/' . ($parts[1] ?? '');
         $pdo = Database::pdo();
+        $find = $pdo->prepare(
+            'SELECT id FROM terms WHERE school_id = :school_id AND label = :label AND (rms_key IS NULL OR rms_key = \'\') ORDER BY id LIMIT 1'
+        );
+        $find->execute(['school_id' => $schoolId, 'label' => $label]);
+        $id = (int) $find->fetchColumn();
+        if ($id > 0) {
+            $pdo->prepare('UPDATE terms SET rms_key = :rms_key WHERE id = :id AND school_id = :school_id AND (rms_key IS NULL OR rms_key = \'\')')
+                ->execute(['rms_key' => $key, 'id' => $id, 'school_id' => $schoolId]);
+            return $id;
+        }
         $pdo->prepare('INSERT INTO terms (school_id, label, is_current, rms_key) VALUES (:school_id, :label, 0, :rms_key)')
             ->execute(['school_id' => $schoolId, 'label' => $label, 'rms_key' => $key]);
         return (int) $pdo->lastInsertId();
