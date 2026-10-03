@@ -37,6 +37,7 @@ final class Repo
 
     public static function terms(int $schoolId): array
     {
+        self::collapseDuplicateTerms($schoolId);
         $statement = Database::pdo()->prepare(
             'SELECT t.id, t.label, t.is_current, t.start_date, t.end_date,
                     (SELECT COUNT(*) FROM student_groups g WHERE g.term_id = t.id) AS group_count
@@ -46,6 +47,84 @@ final class Repo
         );
         $statement->execute(['school_id' => $schoolId]);
         return $statement->fetchAll();
+    }
+
+    private static function collapseDuplicateTerms(int $schoolId): void
+    {
+        $pdo = Database::pdo();
+        $key = "CASE WHEN t.label REGEXP '[0-9]+/[0-9]+' THEN CONCAT(CAST(SUBSTRING_INDEX(REGEXP_SUBSTR(t.label, '[0-9]+/[0-9]+'), '/', 1) AS UNSIGNED), '/', SUBSTRING_INDEX(REGEXP_SUBSTR(t.label, '[0-9]+/[0-9]+'), '/', -1)) ELSE '' END";
+        $duplicate = $pdo->prepare(
+            "SELECT 1 FROM terms t
+             JOIN terms other ON other.school_id = t.school_id AND other.id <> t.id
+              AND {$key} <> ''
+              AND {$key} = " . str_replace('t.label', 'other.label', $key) . "
+             WHERE t.school_id = :school_id LIMIT 1"
+        );
+        $duplicate->execute(['school_id' => $schoolId]);
+        if (!$duplicate->fetchColumn()) {
+            return;
+        }
+        $pdo->exec('DROP TEMPORARY TABLE IF EXISTS term_merge_keepers');
+        $pdo->exec(
+            "CREATE TEMPORARY TABLE term_merge_keepers AS
+             SELECT school_id, term_key, keep_id, start_date, end_date, is_current
+             FROM (
+                SELECT
+                    ranked.school_id,
+                    ranked.term_key,
+                    ranked.id AS keep_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY ranked.school_id, ranked.term_key
+                        ORDER BY ranked.group_count DESC, ranked.has_key DESC, ranked.id ASC
+                    ) AS rn,
+                    MIN(ranked.start_date) OVER (PARTITION BY ranked.school_id, ranked.term_key) AS start_date,
+                    MAX(ranked.end_date) OVER (PARTITION BY ranked.school_id, ranked.term_key) AS end_date,
+                    MAX(ranked.is_current) OVER (PARTITION BY ranked.school_id, ranked.term_key) AS is_current
+                FROM (
+                    SELECT
+                        t.id,
+                        t.school_id,
+                        t.start_date,
+                        t.end_date,
+                        t.is_current,
+                        {$key} AS term_key,
+                        (t.rms_key IS NOT NULL AND TRIM(t.rms_key) <> '') AS has_key,
+                        (SELECT COUNT(*) FROM student_groups g WHERE g.term_id = t.id) AS group_count
+                    FROM terms t
+                    WHERE t.school_id = " . (int) $schoolId . "
+                ) ranked
+                WHERE ranked.term_key <> ''
+             ) picked
+             WHERE rn = 1"
+        );
+        $match = "k.school_id = loser.school_id AND k.keep_id <> loser.id AND {$key} = k.term_key";
+        $matchLoser = str_replace('t.label', 'loser.label', $match);
+        $pdo->exec(
+            "UPDATE terms loser
+             JOIN term_merge_keepers k ON {$matchLoser} AND TRIM(loser.rms_key) <> ''
+             SET loser.rms_key = NULL"
+        );
+        $pdo->exec(
+            "UPDATE terms keeper
+             JOIN term_merge_keepers k ON k.keep_id = keeper.id
+             SET keeper.rms_key = IF(keeper.rms_key IS NULL OR TRIM(keeper.rms_key) = '' OR TRIM(keeper.rms_key) <> k.term_key, k.term_key, keeper.rms_key),
+                 keeper.start_date = COALESCE(keeper.start_date, k.start_date),
+                 keeper.end_date = COALESCE(keeper.end_date, k.end_date),
+                 keeper.is_current = IF(k.is_current = 1, 1, keeper.is_current)"
+        );
+        foreach ([
+            "DELETE g FROM student_groups g JOIN terms loser ON loser.id = g.term_id JOIN term_merge_keepers k ON {$matchLoser} JOIN student_groups taken ON taken.school_id = g.school_id AND taken.term_id = k.keep_id AND g.rms_group_code IS NOT NULL AND g.rms_group_code <> '' AND taken.rms_group_code = g.rms_group_code",
+            "UPDATE student_groups g JOIN terms loser ON loser.id = g.term_id JOIN term_merge_keepers k ON {$matchLoser} SET g.term_id = k.keep_id",
+            "DELETE p FROM study_plans p JOIN terms loser ON loser.id = p.term_id JOIN term_merge_keepers k ON {$matchLoser} JOIN study_plans taken ON taken.school_id = p.school_id AND taken.term_id = k.keep_id AND p.rms_key IS NOT NULL AND p.rms_key <> '' AND taken.rms_key = p.rms_key",
+            "UPDATE study_plans p JOIN terms loser ON loser.id = p.term_id JOIN term_merge_keepers k ON {$matchLoser} SET p.term_id = k.keep_id",
+            "DELETE h FROM holidays h JOIN terms loser ON loser.id = h.term_id JOIN term_merge_keepers k ON {$matchLoser} JOIN holidays taken ON taken.school_id = h.school_id AND taken.term_id = k.keep_id AND taken.holiday_date = h.holiday_date",
+            "UPDATE holidays h JOIN terms loser ON loser.id = h.term_id JOIN term_merge_keepers k ON {$matchLoser} SET h.term_id = k.keep_id",
+            "UPDATE group_twins tw JOIN terms loser ON loser.id = tw.term_id JOIN term_merge_keepers k ON {$matchLoser} SET tw.term_id = k.keep_id",
+            "DELETE loser FROM terms loser JOIN term_merge_keepers k ON {$matchLoser}",
+        ] as $sql) {
+            $pdo->exec($sql);
+        }
+        $pdo->exec('DROP TEMPORARY TABLE IF EXISTS term_merge_keepers');
     }
 
     public static function teachers(int $schoolId): array
