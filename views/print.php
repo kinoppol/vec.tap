@@ -60,12 +60,14 @@ $kindQuery = 'kind=' . rawurlencode($kind) . $termQuery;
             </select>
         </form>
         <?php endif; ?>
+        <div class="print-actions">
         <?php if ($showAll): ?>
             <a class="btn" href="<?= e(url('/print?' . $kindQuery . '&id=' . $selectedId)) ?>">แสดงทีละรายการ</a>
         <?php else: ?>
             <a class="btn" href="<?= e(url('/print?' . $kindQuery . '&all=1')) ?>">แสดงทั้งหมด</a>
         <?php endif; ?>
         <button class="btn btn-primary" type="button" onclick="window.print()"><i class="bi bi-printer"></i> พิมพ์</button>
+        </div>
     <?php endif; ?>
 </div>
 <?php if ($showAll): ?><p class="hint print-tools">กำลังแสดงเฉพาะรายการที่มีคาบเรียนแล้ว กดพิมพ์เพื่อสั่งพิมพ์ทั้งหมด</p><?php endif; ?>

@@ -426,6 +426,20 @@ details pre { white-space: pre-wrap; background: #FDFBFD; padding: 10px; border-
 
 .term-switch { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .term-switch select, .print-tools select { border: 1px solid #E2D8E4; border-radius: 8px; padding: 8px 10px; background: #fff; max-width: 360px; font-weight: 500; }
+.toolbar.print-tools { gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.print-tools .term-switch label { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.print-tools .term-switch select,
+.print-tools select,
+.print-tools .group-filter input { height: 40px; box-sizing: border-box; }
+.print-tools .group-filter input { padding: 0 12px; }
+.print-tools .tabs { flex-wrap: nowrap; }
+.print-tools .tab,
+.print-tools .btn { height: 40px; box-sizing: border-box; display: inline-flex; align-items: center; white-space: nowrap; }
+.print-tools .tab { padding: 0 14px; }
+.print-tools .btn { padding: 0 12px; }
+.print-tools .group-filter { flex: 1 1 200px; width: auto; height: 40px; min-width: 180px; max-width: 280px; }
+.print-tools .inline { align-items: center; }
+.print-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .print-sheet { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
 .print-sheet header h2 { margin: 0 0 4px; font-size: 18px; }
 .print-sheet header p { margin: 0 0 12px; color: var(--muted); }
@@ -456,4 +470,6 @@ details pre { white-space: pre-wrap; background: #FDFBFD; padding: 10px; border-
     .sidebar { width: 100%; height: auto; position: relative; }
     .timetable-card, .side { display: flex; flex-direction: column; }
     .side { grid-row: auto; }
+    .print-tools .tabs { flex-wrap: wrap; }
+    .print-actions { margin-left: 0; }
 }
